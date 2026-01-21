@@ -1,0 +1,13 @@
+{{- $isWork := promptBoolOnce . "data.is_work" "Are you configuring this for work?" false -}}
+{{- $gitName := promptStringOnce . "data.git_name" "Enter your Git user.name" -}}
+{{- $gitEmail := promptStringOnce . "data.git_email" "Enter your Git user.email (personal)" -}}
+{{- $gitEmailWork := promptStringOnce . "data.git_email_work" "Enter your Git user.email (work)" -}}
+
+[git]
+autoCommit = true
+
+[data]
+is_work = {{ $isWork }}
+git_name = "{{ $gitName }}"
+git_email = "{{ $gitEmail }}"
+git_email_work = "{{ $gitEmailWork }}"

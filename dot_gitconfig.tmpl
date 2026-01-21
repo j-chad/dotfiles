@@ -1,0 +1,78 @@
+# Default identity depends on machine
+{{- if .is_work }}
+[include]
+    path = ~/.gitconfig-work
+{{- else }}
+[include]
+    path = ~/.gitconfig-personal
+{{- end }}
+
+# Repositories in specific directories use specific identities
+[includeIf "gitdir:~/code/personal/"]
+    path = ~/.gitconfig-personal
+[includeIf "gitdir:~/code/work/"]
+    path = ~/.gitconfig-work
+[includeIf "gitdir:~/.local/share/chezmoi/"]
+    path = ~/.gitconfig-personal
+
+[user]
+	name = {{ .git_name }}
+
+[url "git@github.com:j-chad"]
+    insteadOf = https://github.com/j-chad
+[push]
+    autoSetupRemote = true
+[core]
+    editor = nano
+    excludesfile = ~/.gitignore
+
+    {{- if eq .chezmoi.os "darwin" }}
+    # Make `git rebase` safer on macOS.
+    # More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
+    trustctime = false
+    {{- end }}
+
+[column]
+    ui = auto
+[branch]
+    sort = -committerdate
+[tag]
+    sort = version:refname
+[diff]
+    algorithm = histogram
+    colorMoved = plain
+    mnemonicPrefix = true
+    renames = true
+[alias]
+    # show a pretty graph of all branches
+    lg = log --oneline --decorate --graph --all --abbrev-commit -n 20
+
+    # push current branch to its upstream branch
+    p = push
+
+    # Commit all changes except for submodules
+    ca = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av
+
+    # Switch to a different branch.
+    go = "!f() { git switch \"$1\" 2>/dev/null || git switch -c \"$1\"; }; f"
+
+    # Switch to the default branch (main or master).
+    main = "!git switch $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')"
+
+    # Create a new branch off the default branch (main/master)
+	new = "!f() { git main && git go \"$1\"; }; f"
+
+    # Show a concise status.
+    s = status -s
+
+    # Show the diff between the latest commit and the current state.
+    d = !"git diff-index --quiet HEAD -- || clear; git --no-pager diff --patch-with-stat"
+
+    # Amend the currently staged files to the latest commit.
+    amend = commit --amend --reuse-message=HEAD
+
+    # Show the user email for the current repository.
+    whoami = config user.email
+
+    # List local branches sorted by most recently committed to.
+    recent = for-each-ref --sort=-committerdate refs/heads/ --format='%(committerdate:relative)%09%(refname:short)'
