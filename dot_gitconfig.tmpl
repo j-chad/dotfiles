@@ -83,3 +83,6 @@
 	  git fetch origin $base; \
 	  git merge origin/$base; \
 	}; f"
+
+	# List all git aliases.
+	alias = "!git config --get-regexp '^alias\\.' | sed 's/^alias\\.//; s/ .*//' | sort"
