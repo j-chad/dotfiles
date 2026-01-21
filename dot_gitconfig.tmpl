@@ -51,7 +51,7 @@
     p = push
 
     # Commit all changes except for submodules
-    ca = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av
+    c = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av
 
     # Switch to a different branch.
     go = "!f() { git switch \"$1\" 2>/dev/null || git switch -c \"$1\"; }; f"
@@ -76,3 +76,10 @@
 
     # List local branches sorted by most recently committed to.
     recent = for-each-ref --sort=-committerdate refs/heads/ --format='%(committerdate:relative)%09%(refname:short)'
+
+	# Update the current branch with the latest changes from the default branch.
+    up = "!f() { \
+	  base=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'); \
+	  git fetch origin $base; \
+	  git merge origin/$base; \
+	}; f"
