@@ -86,3 +86,8 @@
 
 	# List all git aliases.
 	alias = "!git config --get-regexp '^alias\\.' | sed 's/^alias\\.//; s/ .*//' | sort"
+
+	# Create a pull request for the current branch.
+	pr = "!f() { \
+  		git push -u origin HEAD && gh pr create --web; \
+	}; f"
