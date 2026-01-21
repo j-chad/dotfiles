@@ -60,7 +60,7 @@
     main = "!git switch $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')"
 
     # Create a new branch off the default branch (main/master)
-	new = "!f() { git main && git go \"$1\"; }; f"
+	new = "!f() { git main && git pull --ff-only && git go \"$1\"; }; f"
 
     # Show a concise status.
     s = status -s
