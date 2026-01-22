@@ -12,9 +12,6 @@ sudo nvram SystemAudioVolume=" "
 defaults write NSGlobalDomain AppleLanguages -array "en-NZ" "en-AU" "en-GB" "en"
 defaults write NSGlobalDomain AppleLocale -string "en_NZ"
 
-# Stop iTunes from responding to the keyboard media keys
-launchctl unload -w /System/Library/LaunchAgents/com.apple.rcd.plist 2> /dev/null
-
 # Disable machine sleep while charging
 sudo pmset -c sleep 0
 
