@@ -17,10 +17,14 @@
 			"*.env": "deny",
 			"*.env.*": "deny",
 			"*.env.example": "ask",
-			"go vet *": "allow",
+			"go vet *": "allow"
 		},
 		"bash": {
+			"*": "ask"
+		},
+		"task": {
 			"*": "ask",
+			"explore": "allow"
 		},
 		"glob": "allow",
 		"grep": "allow",
@@ -35,5 +39,5 @@
       "url": "https://api.githubcopilot.com/mcp/",
       "oauth": {}
     }
-  },
+  }
 }
