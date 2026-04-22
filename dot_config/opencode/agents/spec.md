@@ -185,6 +185,16 @@ Most projects only need `spec.md`. Don't create extra files unless the project w
 
 After writing the spec, present it to the user and ask for feedback. The first draft is never final. Iterate until the user is satisfied.
 
+### Architecture Review
+
+If the spec involves non-trivial design — multiple components, meaningful data flow, architectural choices — invoke the `@architect` agent as a subagent via the Task tool to review the spec. Simple specs (config changes, small scripts, single-file tools) don't need this step.
+
+When the architect's review comes back:
+1. Read the review file.
+2. Summarise the key findings and recommendations to the user.
+3. Ask if they want to incorporate any into the spec.
+4. If yes, update the spec accordingly.
+
 ## Spec Format
 
 ```markdown
