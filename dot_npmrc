@@ -1,0 +1,3 @@
+strict-ssl=true
+min-release-age=14
+ignore-scripts=true
