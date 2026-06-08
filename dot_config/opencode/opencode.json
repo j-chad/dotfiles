@@ -3,6 +3,9 @@
 	"share": "disabled",
 	"username": "Jackson",
 	"autoupdate": "notify",
+	"compaction": {
+		"auto": false
+	},
 	"enabled_providers": [
 		"github-copilot",
 		"anthropic",
@@ -32,12 +35,5 @@
 		"todowrite": "allow",
 		"todoread": "allow",
 		"question": "allow"
-  },
-  "mcp": {
-    "github": {
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "oauth": {}
-    }
   }
 }
