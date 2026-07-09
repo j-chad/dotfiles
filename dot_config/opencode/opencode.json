@@ -8,8 +8,9 @@
 		"anthropic",
 		"openai"
 	],
+
 	"small_model": "anthropic/claude-haiku-4-5",
-	"model": "github-copilot/claude-sonnet-4-6",
+	"model": "github-copilot/claude-sonnet-4.6",
 	"permission": {
 		"*": "ask",
 		"read": {
@@ -32,5 +33,10 @@
 		"todowrite": "allow",
 		"todoread": "allow",
 		"question": "allow"
-  }
+  },
+	"agent": {
+		"explore": {
+			"model": "github-copilot/claude-sonnet-4.6"
+		}
+	}
 }
