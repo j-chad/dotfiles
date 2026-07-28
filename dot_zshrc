@@ -42,6 +42,10 @@ export NVM_DIR="$HOME/.nvm"
 load-nvm() {
   unset -f node npm npx nvm
   source "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && {
+    autoload -Uz bashcompinit && bashcompinit
+    source "$NVM_DIR/bash_completion"
+  }
 }
 
 for cmd in node npm npx nvm; do
