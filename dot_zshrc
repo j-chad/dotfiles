@@ -20,7 +20,7 @@ eval "$(starship init zsh)"
 
 # --- Autocompletion ---
 zstyle ':autocomplete:*' verbose no
-zinit light marlonrichert/zsh-autocomplete
+zinit light marlonrichert/zsh-autocomplete # runs compinit after loading, so it must be loaded before any other plugins that use completion
 
 # --- Async Plugins ---
 zinit ice wait lucid atload'_zsh_autosuggest_start'
@@ -46,6 +46,10 @@ load-nvm() {
 for cmd in node npm npx nvm; do
   eval "$cmd() { load-nvm; $cmd \"\$@\" }"
 done
+
+# --- aliases ---
+alias g="git"
+compdef g=git
 
 # --- zoxide ---
 eval "$(zoxide init zsh)"
