@@ -75,7 +75,7 @@
     whoami = config user.email
 
     # List local branches sorted by most recently committed to.
-    recent = for-each-ref --sort=-committerdate refs/heads/ --format='%(committerdate:relative)%09%(refname:short)'
+    recent = "!bash ~/.config/git/switch_recent.sh"
 
 	# Update the current branch with the latest changes from the default branch.
     up = "!f() { \
