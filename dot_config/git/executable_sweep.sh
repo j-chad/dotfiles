@@ -12,18 +12,20 @@ set -uo pipefail
 command -v gh >/dev/null 2>&1 || {
   echo "git sweep: gh (GitHub CLI) is required." >&2; exit 1; }
 
-dry_run=0; assume_yes=0; want_stale=0; stale_days=90
+dry_run=0; assume_yes=0; want_stale=0; stale_days=90; prefetch=100
 for a in "$@"; do
   case "$a" in
     -n|--dry-run) dry_run=1 ;;
     -y|--yes)     assume_yes=1 ;;
     --stale)      want_stale=1 ;;
     --stale=*)    want_stale=1; stale_days=${a#--stale=} ;;
-    -h|--help)    echo "usage: git sweep [-n|--dry-run] [-y|--yes] [--stale[=DAYS]]"; exit 0 ;;
+    --prefetch=*) prefetch=${a#--prefetch=} ;;
+    -h|--help)    echo "usage: git sweep [-n|--dry-run] [-y|--yes] [--stale[=DAYS]] [--prefetch=N]"; exit 0 ;;
     *) echo "git sweep: unknown option '$a'" >&2; exit 2 ;;
   esac
 done
 case "$stale_days" in *[!0-9]*|"") echo "git sweep: --stale needs a number of days" >&2; exit 2 ;; esac
+case "$prefetch"   in *[!0-9]*|"") echo "git sweep: --prefetch needs a number" >&2; exit 2 ;; esac
 
 current=$(git branch --show-current 2>/dev/null || true)
 default=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
@@ -50,29 +52,63 @@ total=${#branches[@]}
 
 [ -t 2 ] || echo "Checking PR status of $total branch(es)..." >&2
 
+# Two bulk calls fetch the most recent MERGED and CLOSED PRs (up to --prefetch
+# each) -- the only states we ever prune -- so open PRs don't use up the window.
+# Branches found here need no per-branch call; only branches missing from these
+# results (PR-less, or older than the window) fall back to `gh pr view`.
+# `--state closed` includes merged on some gh versions and not others, so we ask
+# for merged explicitly; overlap is harmless (the per-branch scan takes the first
+# match and we filter on the returned state anyway).
+# Lookup is a per-branch scan of this TSV (no hash map -> works on bash 3.2).
+[ -t 2 ] && printf 'Fetching recent merged/closed PRs...' >&2
+recent_prs=$(
+  for st in merged closed; do
+    gh pr list --state "$st" --limit "$prefetch" \
+      --json headRefName,state,number,title \
+      --jq '.[] | [.headRefName,.state,(.number|tostring),.title] | @tsv' 2>/dev/null
+  done
+)
+[ -t 2 ] && printf '\r\033[K' >&2
+
 now=$(date +%s); stale_secs=$(( stale_days * 86400 ))
 pr_rows=()        # branch<TAB>STATE<TAB>number<TAB>title   (MERGED/CLOSED)
 stale_rows=()     # branch<TAB>age-in-days                  (no PR, old)
-no_pr=0; i=0
+no_pr=0; i=0; looked_up=0
 for entry in "${branches[@]}"; do
   IFS=$'\t' read -r br ts <<<"$entry"
   i=$((i+1))
   [ -t 2 ] && printf '\r\033[K[%d/%d] %s' "$i" "$total" "$br" >&2
-  if info=$(gh pr view "$br" --json state,number,title \
-              --jq '[.state,(.number|tostring),.title]|@tsv' 2>/dev/null); then
-    IFS=$'\t' read -r state number title <<<"$info"
-    case "$state" in
-      MERGED|CLOSED) pr_rows+=("$br"$'\t'"$state"$'\t'"$number"$'\t'"$title") ;;
-    esac
+
+  state=""; number=""; title=""
+  # 1) try the prefetched set (first match = most recent PR for this branch)
+  hit=""
+  [ -n "$recent_prs" ] && hit=$(printf '%s\n' "$recent_prs" \
+        | awk -F'\t' -v b="$br" '$1==b {print; exit}')
+  if [ -n "$hit" ]; then
+    IFS=$'\t' read -r _ state number title <<<"$hit"
   else
-    if [ "$want_stale" -eq 1 ] && [ -n "$ts" ] && [ "$(( now - ts ))" -gt "$stale_secs" ]; then
-      stale_rows+=("$br"$'\t'"$(( (now - ts) / 86400 ))")
-    else
-      no_pr=$(( no_pr + 1 ))
+    # 2) not in the window -> one individual lookup (PR-less branches fail here)
+    looked_up=$(( looked_up + 1 ))
+    if info=$(gh pr view "$br" --json state,number,title \
+                --jq '[.state,(.number|tostring),.title]|@tsv' 2>/dev/null); then
+      IFS=$'\t' read -r state number title <<<"$info"
     fi
   fi
+
+  case "$state" in
+    MERGED|CLOSED) pr_rows+=("$br"$'\t'"$state"$'\t'"$number"$'\t'"$title") ;;
+    OPEN) : ;;                                   # keep branches with open PRs
+    "")                                          # no PR at all
+      if [ "$want_stale" -eq 1 ] && [ -n "$ts" ] && [ "$(( now - ts ))" -gt "$stale_secs" ]; then
+        stale_rows+=("$br"$'\t'"$(( (now - ts) / 86400 ))")
+      else
+        no_pr=$(( no_pr + 1 ))
+      fi ;;
+  esac
 done
 [ -t 2 ] && printf '\r\033[K' >&2   # wipe the progress line
+[ -t 2 ] && printf '%s(prefetched recent PRs; %d branch(es) needed an individual lookup)%s\n' \
+  "$dim" "$looked_up" "$rst" >&2
 
 if [ "${#pr_rows[@]}" -eq 0 ] && [ "${#stale_rows[@]}" -eq 0 ]; then
   echo "Nothing to prune." >&2
@@ -105,7 +141,8 @@ mapfile -t aligned < <(
   printf '%s\n' "${rows[@]}" \
   | { command -v column >/dev/null 2>&1 \
         && column -t -s $'\t' \
-        || awk -F'\t' '{ printf "%-30s %-7s %s\n", $1, $2, $3 }'; } \
+        || awk -F'\t' '{b[NR]=$1;c[NR]=$2;e[NR]=$3;n=length($1);if(n>w)w=n}
+             END{for(i=1;i<=NR;i++) printf "%-*s %-7s %s\n", w, b[i], c[i], e[i]}'; } \
   | sed -E "
       s/^([^ ]+ +)(MERGED)( +)(.*)$/  \1${grn}\2${rst}\3${dim}\4${rst}/
       s/^([^ ]+ +)(CLOSED)( +)(.*)$/  \1${red}\2${rst}\3${dim}\4${rst}/
