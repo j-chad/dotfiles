@@ -31,7 +31,7 @@ fi
 tmp=$(mktemp)
 {
   acli jira workitem search \
-    --jql "assignee = currentUser() AND statusCategory != Done" \
+    --jql "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC" \
     --fields "key,summary" --csv --limit 100 2>/dev/null \
   | awk '
       { sub(/\r$/, "") }                       # strip CR from CSV
