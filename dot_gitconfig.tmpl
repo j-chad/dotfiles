@@ -85,7 +85,7 @@
 	}; f"
 
 	# List all git aliases.
-	alias = "!git config --get-regexp '^alias\\.' | sed 's/^alias\\.//; s/ .*//' | sort"
+	alias = "!bash ~/.config/git/aliases.sh"
 
 	# Create a pull request for the current branch.
 	pr = "!bash ~/.config/git/pr.sh"
