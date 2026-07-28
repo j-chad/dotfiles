@@ -56,6 +56,13 @@ done
 alias g="git"
 compdef g=git
 
+# Git alias completion descriptions, sourced from `git alias` itself.
+() {
+  local -a cmds=( ${(f)"$(git alias --pairs 2>/dev/null)"} )
+  cmds=( ${cmds/$'\t'/:} )                      # name<TAB>desc -> name:desc
+  (( $#cmds )) && zstyle ':completion:*:*:git:*' user-commands $cmds
+}
+
 # --- zoxide ---
 eval "$(zoxide init zsh)"
 
