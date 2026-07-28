@@ -4,10 +4,11 @@
 # kek-1599-sale-date-change). Offers to reuse an existing branch for the ticket
 # and to move the ticket to In Progress.
 #   git ticket
-# Requires: acli (Atlassian CLI) and fzf.
+# Requires: acli (Atlassian CLI; run `acli jira auth login --web` once) and fzf.
 set -uo pipefail
 
 lib="$(dirname "$0")/_lib.sh"
+# shellcheck source=./_lib.sh
 [ -f "$lib" ] && . "$lib" || { echo "git ticket: missing $lib" >&2; exit 1; }
 
 MAX_SLUG_WORDS=6
@@ -21,21 +22,6 @@ done
 slugify() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' \
     | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
-}
-
-# Offer to move a ticket to In Progress, unless it already is.
-offer_transition() {
-  local k=$1 st=$2 yn
-  [ "$(printf '%s' "$st" | tr '[:upper:]' '[:lower:]')" = "in progress" ] && return 0
-  read -e -p "Move $k to In Progress? [y/N]: " yn || return 0
-  case "$yn" in
-    y|Y|yes|YES)
-      if acli jira workitem transition --key "$k" --status "In Progress" --yes >/dev/null 2>&1; then
-        echo "${grn}Moved $k to In Progress.${rst}" >&2
-      else
-        echo "${ylw}Couldn't transition $k (the workflow may use a different status name).${rst}" >&2
-      fi ;;
-  esac
 }
 
 # --- authentication -------------------------------------------------------
@@ -115,7 +101,7 @@ if [ "${#existing[@]}" -gt 0 ]; then
       fi
       [ -n "$target" ] || { echo "No branch selected." >&2; exit 0; }
       git switch "$target"
-      offer_transition "$key" "$status"
+      prompt_jira_transition "$key" "In Progress" "$status"
       exit 0 ;;
     c|C) : ;;  # fall through and create a new branch
     *) echo "Aborted." >&2; exit 0 ;;
@@ -147,4 +133,4 @@ else
   git switch -c "$branch"
 fi
 
-offer_transition "$key" "$status"
+prompt_jira_transition "$key" "In Progress" "$status"

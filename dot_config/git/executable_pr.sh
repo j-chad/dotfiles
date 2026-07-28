@@ -2,22 +2,26 @@
 # Invoked by:  git pr   (see [alias] pr in ~/.gitconfig)
 # Pushes the current branch, then opens a PR whose title is formatted from the
 # branch name and whose body has the Jira placeholder filled in.
-#   Branch  abc-1234-my-change
-#     title  [ABC-1234] My change
-#     body   ABC-XXX in the PR template -> ABC-1234  (link text and URL)
+#   Branch  kek-1234-my-change
+#     title  [KEK-1234] My change
+#     body   KEK-XXX in the PR template -> KEK-1234  (link text and URL)
 # Extra arguments are forwarded to `gh pr create`.
 set -uo pipefail
+
+lib="$(dirname "$0")/_lib.sh"
+# shellcheck source=./_lib.sh
+[ -f "$lib" ] && . "$lib" || { echo "pr: missing $lib" >&2; exit 1; }
 
 branch=$(git branch --show-current)
 [ -n "$branch" ] || { echo "pr: not on a branch" >&2; exit 1; }
 
 git push -u origin HEAD || exit 1
 
-# [ABC-1234] My change
+# [KEK-1234] My change
 title=$(printf '%s' "$branch" | perl -pe \
   's/^([a-zA-Z]+)-(\d+)-(.*)$/my($p,$n,$d)=($1,$2,$3);$d=~tr|-| |;"[".uc($p)."-".$n."] ".ucfirst($d)/e')
 
-# ABC-1234  (empty if the branch does not match)
+# KEK-1234  (empty if the branch does not match)
 ticket=$(printf '%s' "$branch" | perl -ne 'print uc($1)."-".$2 if /^([a-zA-Z]+)-(\d+)-/')
 
 args=(--web)
@@ -43,4 +47,10 @@ if [ -n "$root" ] && [ -n "$ticket" ]; then
   done
 fi
 
-gh pr create "${args[@]}" "$@"
+# If acli is available, offer to move the ticket to In Review
+if command -v acli >/dev/null 2>&1; then
+  prompt_jira_transition "$ticket" "In Review"
+fi
+
+# Open the PR.
+gh pr create "${args[@]}" "$@" || exit

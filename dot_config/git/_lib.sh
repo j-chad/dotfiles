@@ -22,3 +22,26 @@ spin() {
   done
   printf '\r\033[K' >&2
 }
+
+# prompt_jira_transition <key> <target-status> [current-status]
+# Offer to move the Jira ticket <key> to <target-status>. Assumes acli is
+# installed -- callers for which acli is optional must check first. No-op when
+# the key is empty, or when the ticket is already in <target-status> (when a
+# <current-status> is passed). Fails soft if the transition itself errors.
+prompt_jira_transition() {
+  local k=$1 target=$2 cur=${3:-} yn
+  [ -n "$k" ] || return 0
+  if [ -n "$cur" ] && \
+     [ "$(printf '%s' "$cur" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$target" | tr '[:upper:]' '[:lower:]')" ]; then
+    return 0
+  fi
+  read -e -p "[JIRA] Transition $k to $target? [y/N]: " yn || return 0
+  case "$yn" in
+    y|Y|yes|YES)
+      if acli jira workitem transition --key "$k" --status "$target" --yes >/dev/null 2>&1; then
+        echo "${grn}Moved $k to $target.${rst}" >&2
+      else
+        echo "${ylw}Couldn't transition $k (the workflow may use a different status name).${rst}" >&2
+      fi ;;
+  esac
+}
