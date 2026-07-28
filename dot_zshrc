@@ -12,15 +12,18 @@ autoload -Uz _zinit
 (( ${+_comps} )) && _comps[zinit]=_zinit
 
 # --- Starship ---
-eval "$(starship init zsh)"
 export STARSHIP_LOG=error
+eval "$(starship init zsh)"
+
+# --- Local machine config (PATH, fpath additions, etc.) — BEFORE plugins ---
+[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
 
 # --- Autocompletion ---
 zstyle ':autocomplete:*' verbose no
 zinit light marlonrichert/zsh-autocomplete
 
 # --- Async Plugins ---
-zinit ice wait lucid
+zinit ice wait lucid atload'_zsh_autosuggest_start'
 zinit light zsh-users/zsh-autosuggestions
 
 zinit ice wait lucid
@@ -43,17 +46,6 @@ load-nvm() {
 for cmd in node npm npx nvm; do
   eval "$cmd() { load-nvm; $cmd \"\$@\" }"
 done
-
-# --- Completion setup (run once) ---
-# Add any completion dirs before compinit (local file may add more to fpath)
-# (Leave fpath modifications to ~/.zshrc.local where needed)
-autoload -Uz compinit
-
-# --- Load local machine config (installers, PATH tweaks, agent sockets, etc.) ---
-[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
-
-# Now initialize completions once, after fpath is finalized
-compinit
 
 # --- zoxide ---
 eval "$(zoxide init zsh)"
