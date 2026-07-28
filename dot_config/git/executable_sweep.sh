@@ -82,24 +82,45 @@ if [ "${#pr_rows[@]}" -eq 0 ] && [ "${#stale_rows[@]}" -eq 0 ]; then
 fi
 
 to_delete=()
-if [ "${#pr_rows[@]}" -gt 0 ]; then
+
+# Build plain "branch<TAB>STATE<TAB>detail" rows (PR rows first, then stale).
+rows=()
+for row in "${pr_rows[@]}"; do
+  IFS=$'\t' read -r br state number title <<<"$row"
+  rows+=("${br}"$'\t'"${state}"$'\t'"#${number} ${title}")
+  to_delete+=("$br")
+done
+n_pr=${#pr_rows[@]}
+for row in "${stale_rows[@]}"; do
+  IFS=$'\t' read -r br age <<<"$row"
+  rows+=("${br}"$'\t'"STALE"$'\t'"${age}d ago")
+  to_delete+=("$br")
+done
+
+# Align every row in one pass (so both sections share column widths), THEN
+# colour: escape codes must be added after column, or they skew the widths.
+# sed wraps the state word and dims the detail via backreferences (portable;
+# avoids gawk-only match(); works with BSD sed on macOS).
+mapfile -t aligned < <(
+  printf '%s\n' "${rows[@]}" \
+  | { command -v column >/dev/null 2>&1 \
+        && column -t -s $'\t' \
+        || awk -F'\t' '{ printf "%-30s %-7s %s\n", $1, $2, $3 }'; } \
+  | sed -E "
+      s/^([^ ]+ +)(MERGED)( +)(.*)$/  \1${grn}\2${rst}\3${dim}\4${rst}/
+      s/^([^ ]+ +)(CLOSED)( +)(.*)$/  \1${red}\2${rst}\3${dim}\4${rst}/
+      s/^([^ ]+ +)(STALE)( +)(.*)$/  \1${ylw}\2${rst}\3${dim}\4${rst}/
+    "
+)
+
+idx=0
+if [ "$n_pr" -gt 0 ]; then
   echo "Branches with merged/closed PRs:" >&2
-  for row in "${pr_rows[@]}"; do
-    IFS=$'\t' read -r br state number title <<<"$row"
-    [ "$state" = "MERGED" ] && c=$grn || c=$red
-    printf '  %-30s %s%-7s%s %s#%s %s%s\n' \
-      "$br" "$c" "$state" "$rst" "$dim" "$number" "$title" "$rst" >&2
-    to_delete+=("$br")
-  done
+  while [ "$idx" -lt "$n_pr" ]; do printf '%s\n' "${aligned[$idx]}" >&2; idx=$((idx+1)); done
 fi
 if [ "${#stale_rows[@]}" -gt 0 ]; then
   echo "Stale branches with no PR (older than ${stale_days} days):" >&2
-  for row in "${stale_rows[@]}"; do
-    IFS=$'\t' read -r br age <<<"$row"
-    printf '  %-30s %sSTALE%s   %slast commit %sd ago%s\n' \
-      "$br" "$ylw" "$rst" "$dim" "$age" "$rst" >&2
-    to_delete+=("$br")
-  done
+  while [ "$idx" -lt "${#aligned[@]}" ]; do printf '%s\n' "${aligned[$idx]}" >&2; idx=$((idx+1)); done
 fi
 [ "$want_stale" -eq 0 ] && [ "$no_pr" -gt 0 ] && \
   echo "($no_pr more branch(es) have no PR; add --stale to include old ones.)" >&2
