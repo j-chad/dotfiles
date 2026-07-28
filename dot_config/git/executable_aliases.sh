@@ -21,8 +21,13 @@ else
 fi
 
 awk '
-  FNR==1 { section = "" }                      # reset section per file
+  function cont(s) { return (s ~ /\\[[:space:]]*$/) }   # line continues onto next?
 
+  FNR==1 { section = ""; incont = 0 }          # reset per file
+
+  incont == 1 {                                # inside a multi-line value: skip it
+    incont = cont($0); comment = ""; next
+  }
   /^[[:space:]]*[#;]/ {                         # comment line -> remember it
     c = $0; sub(/^[[:space:]]*[#;][[:space:]]?/, "", c); comment = c; next
   }
@@ -32,9 +37,9 @@ awk '
   }
   section == "alias" && /^[[:space:]]*[A-Za-z][A-Za-z0-9-]*[[:space:]]*=/ {
     name = $0; sub(/^[[:space:]]*/, "", name); sub(/[[:space:]]*=.*/, "", name)
-    printf "%s\t%s\n", name, comment; comment = ""; next
+    printf "%s\t%s\n", name, comment; comment = ""; incont = cont($0); next
   }
-  { comment = "" }                              # any other line: drop pending comment
+  { comment = ""; incont = cont($0) }           # any other line: drop pending comment
 ' "${files[@]}" | sort | {
   if command -v column >/dev/null 2>&1; then
     column -t -s $'\t'
