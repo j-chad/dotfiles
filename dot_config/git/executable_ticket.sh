@@ -78,10 +78,10 @@ slugify() {
 }
 
 default_slug=$(slugify "$summary")
-# Prompt pre-filled with the title-derived slug; edit it down to something short.
-read -e -i "$default_slug" -p "Description for $key: " desc || exit 0
-desc=$(slugify "$desc")
-[ -n "$desc" ] || desc=$default_slug
+# Show the title-derived slug as a placeholder: press Enter to accept it, or just
+# type a replacement (no need to clear a pre-filled value first).
+read -e -p "Description for $key [$default_slug]: " desc || exit 0
+desc=$(slugify "${desc:-$default_slug}")
 [ -n "$desc" ] || { echo "git ticket: empty description, aborting." >&2; exit 1; }
 
 branch="$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')-$desc"
