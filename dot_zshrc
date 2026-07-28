@@ -20,6 +20,7 @@ eval "$(starship init zsh)"
 
 # --- Autocompletion ---
 zstyle ':autocomplete:*' verbose no
+zstyle ':autocomplete:*' list-lines 5
 zinit light marlonrichert/zsh-autocomplete # runs compinit after loading, so it must be loaded before any other plugins that use completion
 
 # --- Async Plugins ---
