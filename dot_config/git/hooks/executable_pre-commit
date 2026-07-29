@@ -10,5 +10,22 @@ if [ -x "$repo_hook" ] && [ "$repo_hook" != "$self" ]; then
   "$repo_hook" "$@"
 fi
 
+# Block oversized files (staged blob size, so Git-LFS pointers stay small)
+max_bytes=$(git config --type=int hooks.maxfilesize 2>/dev/null || echo $((5 * 1024 * 1024)))
+large=""
+while IFS= read -r -d '' f; do
+  size=$(git cat-file -s ":$f" 2>/dev/null) || continue
+  [ "$size" -gt "$max_bytes" ] && large="${large}  ${f} (${size} bytes)"$'\n'
+done < <(git diff --cached -z --name-only --diff-filter=AM)
+
+if [ -n "$large" ]; then
+  printf 'Error: staged files exceed %s bytes:\n%s' "$max_bytes" "$large" >&2
+  echo "Raise it with 'git config hooks.maxfilesize <bytes>', or bypass with --no-verify." >&2
+  exit 1
+fi
+
+# Check for conflict markers and whitespace errors in staged files
+git diff --cached --check
+
 # Scan for secrets in staged files
 command -v betterleaks >/dev/null 2>&1 && betterleaks git --pre-commit --redact --staged
