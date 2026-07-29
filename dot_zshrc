@@ -18,12 +18,32 @@ eval "$(starship init zsh)"
 # --- Local machine config (PATH, fpath additions, etc.) — BEFORE plugins ---
 [[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
 
-# --- Autocompletion ---
-zstyle ':autocomplete:*' verbose no
-zstyle ':autocomplete:*' list-lines 5
-zinit light marlonrichert/zsh-autocomplete # runs compinit after loading, so it must be loaded before any other plugins that use completion
+# --- Completion system ---
+zstyle ':completion:*' menu no                              # fzf-tab captures the menu; do NOT use `menu select`
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'   # case-insensitive
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"     # colorize (see LS_COLORS note below)
+zstyle ':completion:*:descriptions' format '[%d]'           # group headers — required for fzf-tab grouping
+zstyle ':completion:*:git-checkout:*' sort false            # keep git's own branch ordering
+
+autoload -Uz compinit
+if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
+  compinit          # full (security check + rebuild) once per day
+else
+  compinit -C       # cached, skip checks, every other shell
+fi
+
+# --- fzf keybindings + completion — MUST be set up before fzf-tab loads ---
+command -v fzf >/dev/null && eval "$(fzf --zsh)"
+
+# fzf-tab previews when completing cd / zoxide
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath 2>/dev/null || ls -1 $realpath'
+zstyle ':fzf-tab:complete:z:*'  fzf-preview 'eza -1 --color=always $realpath 2>/dev/null || ls -1 $realpath'
+zstyle ':fzf-tab:*' fzf-flags --height=50% --layout=reverse
 
 # --- Async Plugins ---
+zinit ice wait lucid
+zinit light Aloxaf/fzf-tab
+
 zinit ice wait lucid atload'_zsh_autosuggest_start'
 zinit light zsh-users/zsh-autosuggestions
 
@@ -55,6 +75,7 @@ done
 # --- aliases ---
 alias g="git"
 compdef g=git
+alias ls="eza"
 
 # Git alias completion descriptions, sourced from `git alias` itself.
 () {
