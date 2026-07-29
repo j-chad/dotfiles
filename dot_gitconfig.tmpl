@@ -25,6 +25,7 @@
 [core]
     editor = nano
     excludesfile = ~/.gitignore
+    hooksPath = ~/.config/git/hooks
 
     {{- if eq .chezmoi.os "darwin" }}
     # Make `git rebase` safer on macOS.
