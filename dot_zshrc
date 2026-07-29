@@ -91,6 +91,7 @@ alias ls="eza"
 
 # --- zoxide ---
 eval "$(zoxide init zsh)"
+zoxide add "$PWD" 2>/dev/null   # register the dir this shell started in (IDE terminals, new tabs)
 unalias zi 2>/dev/null      # drop zinit's `zi` if it's an alias
 zi() { __zoxide_zi "$@" }   # force `zi` to zoxide's interactive query
 
