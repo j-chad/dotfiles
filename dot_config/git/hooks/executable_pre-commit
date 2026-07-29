@@ -39,4 +39,4 @@ fi
 git diff --cached --check
 
 # Scan for secrets in staged files
-command -v betterleaks >/dev/null 2>&1 && betterleaks git --pre-commit --redact --staged
+command -v betterleaks >/dev/null 2>&1 && betterleaks git --pre-commit --redact --staged --no-banner --log-level=warn
