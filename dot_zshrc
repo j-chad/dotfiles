@@ -50,6 +50,11 @@ zinit light zsh-users/zsh-autosuggestions
 zinit ice wait lucid
 zinit light zsh-users/zsh-syntax-highlighting
 
+# --- edit command ---
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey '^X^E' edit-command-line
+
 # --- History ---
 HISTSIZE=2000
 SAVEHIST=2000
