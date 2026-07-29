@@ -87,6 +87,12 @@ alias ls="eza"
 # --- zoxide ---
 eval "$(zoxide init zsh)"
 
+# --- atuin ---
+eval "$(atuin init zsh)"
+
+# --- misc ---
+export HOMEBREW_AUTO_UPDATE_SECS="86400" # 24 hours
+
 # --- Compile ZSH ---
 if [[ ! -f ~/.zshrc.zwc || ~/.zshrc -nt ~/.zshrc.zwc ]]; then
   zcompile ~/.zshrc
