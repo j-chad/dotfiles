@@ -93,6 +93,7 @@ zi() { __zoxide_zi "$@" }   # force `zi` to zoxide's interactive query
 eval "$(atuin init zsh)"
 
 # --- misc ---
+export EDITOR="micro"
 export HOMEBREW_AUTO_UPDATE_SECS="86400" # 24 hours
 
 # --- Compile ZSH ---
