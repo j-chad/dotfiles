@@ -75,9 +75,6 @@
     # Show a concise status.
     s = status -s
 
-    # Show the diff between the latest commit and the current state.
-    d = !"git diff-index --quiet HEAD -- || clear; git diff --patch-with-stat"
-
     # Amend the currently staged files to the latest commit.
     amend = commit --amend --reuse-message=HEAD
 
