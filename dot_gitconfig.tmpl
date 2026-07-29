@@ -23,7 +23,8 @@
 [push]
     autoSetupRemote = true
 [core]
-    editor = nano
+    editor = micro
+    pager = delta
     excludesfile = ~/.gitignore
     hooksPath = ~/.config/git/hooks
 
@@ -32,7 +33,12 @@
     # More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
     trustctime = false
     {{- end }}
-
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    navigate = true
+[merge]
+    conflictStyle = zdiff3
 [column]
     ui = auto
 [branch]
