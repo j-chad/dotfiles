@@ -37,6 +37,9 @@
     diffFilter = delta --color-only
 [delta]
     navigate = true
+    side-by-side = true
+    line-numbers = true
+    hyperlinks = true
 [merge]
     conflictStyle = zdiff3
 [column]
@@ -47,7 +50,7 @@
     sort = version:refname
 [diff]
     algorithm = histogram
-    colorMoved = plain
+    colorMoved = default
     mnemonicPrefix = true
     renames = true
 [alias]
@@ -73,7 +76,7 @@
     s = status -s
 
     # Show the diff between the latest commit and the current state.
-    d = !"git diff-index --quiet HEAD -- || clear; git --no-pager diff --patch-with-stat"
+    d = !"git diff-index --quiet HEAD -- || clear; git diff --patch-with-stat"
 
     # Amend the currently staged files to the latest commit.
     amend = commit --amend --reuse-message=HEAD
