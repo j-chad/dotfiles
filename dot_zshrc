@@ -86,6 +86,8 @@ alias ls="eza"
 
 # --- zoxide ---
 eval "$(zoxide init zsh)"
+unalias zi 2>/dev/null      # drop zinit's `zi` if it's an alias
+zi() { __zoxide_zi "$@" }   # force `zi` to zoxide's interactive query
 
 # --- atuin ---
 eval "$(atuin init zsh)"
