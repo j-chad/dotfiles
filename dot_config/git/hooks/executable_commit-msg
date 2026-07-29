@@ -17,33 +17,113 @@ msg_file="$1"   # commit-msg receives the path to the message file
 comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
 if [ "$comment_char" = auto ]; then comment_char='#'; fi
 
-# Cut the verbose diff (everything from the scissors line down), drop comment
-# lines, then strip leading blanks so "subject" is the first real line —
-# mirroring git's default --cleanup=strip. The trailing '|| true' matters:
-# grep -v exits 1 when a message is all comments, which set -e would treat as fatal.
+# --- message cleanup (mirror git's default --cleanup=strip) ----------------
+# Cut the verbose diff (scissors line down), drop comment lines, then trim
+# leading/trailing blank lines so we lint the same bytes git will commit.
+comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
+[ "$comment_char" = auto ] && comment_char='#'
+
 cleaned="$(
   sed "\|^${comment_char}.*>8|,\$d" "$msg_file" \
     | grep -v "^${comment_char}" \
-    | awk 'NF{f=1} f' \
     || true
 )"
+cleaned="$(printf '%s\n' "$cleaned" \
+  | awk 'NF{f=1; last=NR} f{buf[NR]=$0} END{for(i=1;i<=last;i++) print buf[i]}')"
 
-subject="$(printf '%s\n' "$cleaned" | head -n1)"
-second="$(printf '%s\n' "$cleaned" | sed -n '2p')"
-
-# Skip auto-generated messages: merges, reverts, and autosquash commits have
-# intentionally-shaped subjects that these rules would wrongly reject.
-case "$subject" in
-  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
-esac
-
-if [ -z "$subject" ]; then
+if [ -z "$cleaned" ]; then
   echo "commit-msg: aborting — empty commit message" >&2
   exit 1
 fi
 
-if [ -n "$second" ]; then
-  echo "commit-msg: leave a blank line between the subject and body" >&2
-  echo "  line 2: ${second}" >&2
+# Split into lines portably (no mapfile). title == line 1, body == line 2..N.
+L=()
+while IFS= read -r _line || [ -n "$_line" ]; do L+=("$_line"); done <<< "$cleaned"
+title="${L[0]:-}"
+body=("${L[@]:1}")
+
+# Skip auto-generated messages: merges, reverts, and autosquash commits have
+# intentionally-shaped subjects that these rules would wrongly reject.
+case "$title" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
+
+# --- violation accumulator -------------------------------------------------
+violations=()
+v() { violations+=("$1"); }
+
+# --- Title Rules ---
+title_max=72
+title_min=5
+
+# T1: title-max-length
+[ "${#title}" -gt "$title_max" ] && v "1: T1 title-max-length: ${#title} chars (max ${title_max})"
+
+# T8: title-min-length
+[ "${#title}" -lt "$title_min" ] && v "1: T8 title-min-length: ${#title} chars (min ${title_min})"
+
+# T2: title-trailing-whitespace
+case "$title" in *[" "$'\t']) v "1: T2 title-trailing-whitespace" ;; esac
+
+# T3: title-trailing-punctuation
+case "$title" in *['?:!.,;']) v "1: T3 title-trailing-punctuation" ;; esac
+
+# T4: title-hard-tab
+case "$title" in *$'\t'*) v "1: T4 title-hard-tab" ;; esac
+
+# --- Body Rules ---
+body_max_line_length=80
+body_min=20
+require_body=false
+
+# B4: body-first-line-empty
+if [ "${#body[@]}" -gt 0 ] && [ -n "${body[0]}" ]; then
+    v "2: B4 body-first-line-empty: second line must be blank"
+fi
+
+# Per-line body checks (B1/B2/B3), honouring I3 line-ignoring.
+if [ "${#body[@]}" -gt 0 ]; then
+  lineno=1
+  for line in "${body[@]}"; do
+    lineno=$((lineno + 1))            # body[0] is message line 2
+    if [ -n "$ibl" ] && printf '%s' "$line" | grep -qE "$ibl"; then continue; fi
+
+    # B1: body-max-line-length
+    [ "${#line}" -gt "$body_max_line_length" ] && v "${lineno}: B1 body-max-line-length: ${#line} chars (max ${body_max_line_length})"
+
+    # B2: body-trailing-whitespace
+    case "$line" in *[" "$'\t']) v "${lineno}: B2 body-trailing-whitespace" ;; esac
+
+    # B3: body-hard-tab
+    case "$line" in *$'\t'*) v "${lineno}: B3 body-hard-tab" ;; esac
+  done
+fi
+
+# Assemble body text (I3-filtered) for the whole-body rules B5/B6/B8/B7.
+body_text=""
+if [ "${#body[@]}" -gt 0 ]; then
+  for line in "${body[@]}"; do
+    if [ -n "$ibl" ] && printf '%s' "$line" | grep -qE "$ibl"; then continue; fi
+    body_text="${body_text}${line}"
+  done
+fi
+body_stripped="$(printf '%s' "$body_text" | tr -d ' \t')"
+
+if [ -z "$body_stripped" ]; then
+  # B6: body-is-missing
+  if [ "$require_body" = true ]; then
+    v "3: B6 body-is-missing: a commit body is required"
+  fi
+else
+  # B5: body-min-length
+  [ "${#body_text}" -lt "$body_min" ] && v "3: B5 body-min-length: ${#body_text} chars (min ${body_min})"
+fi
+
+# ======================= REPORT ============================================
+if [ "${#violations[@]}" -gt 0 ]; then
+  echo "commit-msg: ${#violations[@]} violation(s):" >&2
+  printf '  %s\n' "${violations[@]}" >&2
+  echo "Run git commit -e -F .git/COMMIT_EDITMSG to retry"
   exit 1
 fi
+exit 0
