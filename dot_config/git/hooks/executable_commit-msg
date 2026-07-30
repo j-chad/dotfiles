@@ -20,9 +20,6 @@ if [ "$comment_char" = auto ]; then comment_char='#'; fi
 # --- message cleanup (mirror git's default --cleanup=strip) ----------------
 # Cut the verbose diff (scissors line down), drop comment lines, then trim
 # leading/trailing blank lines so we lint the same bytes git will commit.
-comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
-[ "$comment_char" = auto ] && comment_char='#'
-
 cleaned="$(
   sed "\|^${comment_char}.*>8|,\$d" "$msg_file" \
     | grep -v "^${comment_char}" \
@@ -81,12 +78,12 @@ if [ "${#body[@]}" -gt 0 ] && [ -n "${body[0]}" ]; then
     v "2: B4 body-first-line-empty: second line must be blank"
 fi
 
-# Per-line body checks (B1/B2/B3), honouring I3 line-ignoring.
+# Per-line body checks (B1/B2/B3)
+body_text=""
 if [ "${#body[@]}" -gt 0 ]; then
   lineno=1
   for line in "${body[@]}"; do
     lineno=$((lineno + 1))            # body[0] is message line 2
-    if [ -n "$ibl" ] && printf '%s' "$line" | grep -qE "$ibl"; then continue; fi
 
     # B1: body-max-line-length
     [ "${#line}" -gt "$body_max_line_length" ] && v "${lineno}: B1 body-max-line-length: ${#line} chars (max ${body_max_line_length})"
@@ -96,17 +93,12 @@ if [ "${#body[@]}" -gt 0 ]; then
 
     # B3: body-hard-tab
     case "$line" in *$'\t'*) v "${lineno}: B3 body-hard-tab" ;; esac
-  done
-fi
 
-# Assemble body text (I3-filtered) for the whole-body rules B5/B6/B8/B7.
-body_text=""
-if [ "${#body[@]}" -gt 0 ]; then
-  for line in "${body[@]}"; do
-    if [ -n "$ibl" ] && printf '%s' "$line" | grep -qE "$ibl"; then continue; fi
+    # Assemble body text for the whole-body rules B5/B6/B8/B7.
     body_text="${body_text}${line}"
   done
 fi
+
 body_stripped="$(printf '%s' "$body_text" | tr -d ' \t')"
 
 if [ -z "$body_stripped" ]; then
@@ -116,7 +108,7 @@ if [ -z "$body_stripped" ]; then
   fi
 else
   # B5: body-min-length
-  [ "${#body_text}" -lt "$body_min" ] && v "3: B5 body-min-length: ${#body_text} chars (min ${body_min})"
+  [ "${#body_stripped}" -lt "$body_min" ] && v "3: B5 body-min-length: ${#body_stripped} chars (min ${body_min})"
 fi
 
 # ======================= REPORT ============================================
