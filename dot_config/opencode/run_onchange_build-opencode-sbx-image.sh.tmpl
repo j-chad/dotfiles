@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+
+{{- $dir := joinPath .chezmoi.sourceDir "dot_config/opencode" }}
+{{- $inputs := list }}
+{{- range (glob (joinPath $dir "**") | sortAlpha) }}
+    {{-   if and (not (stat .).isDir) (not (hasSuffix ".sh.tmpl" .)) }}
+        {{-     $inputs = append $inputs (printf "%s %s" (include . | sha256sum) (trimPrefix (printf "%s/" $dir) .)) }}
+    {{-   end }}
+{{- end }}
+{{- $tag := ($inputs | join "\n" | sha256sum | trunc 12) }}
+
+# build inputs:
+{{- range $inputs }}
+    #   {{ . }}
+{{- end }}
+
+IMAGE="opencode-sbx:{{ $tag }}"
+
+command -v docker >/dev/null || { echo "no docker, skipping" >&2; exit 0; }
+command -v sbx    >/dev/null || { echo "no sbx, skipping"    >&2; exit 0; }
+
+cd {{ $dir | quote }}
+docker build -t "$IMAGE" .
+
+tar="$(mktemp -t opencode-sbx).tar"
+trap 'rm -f "$tar"' EXIT
+docker image save "$IMAGE" -o "$tar"
+sbx template load "$tar"
+
+printf '%s\n' "$IMAGE" > "$HOME/.config/opencode/.sbx-image"
+echo "loaded $IMAGE"

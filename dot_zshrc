@@ -82,6 +82,23 @@ alias g="git"
 compdef g=git
 alias ls="eza"
 
+# --- Opencode ---
+ocsbx() {
+  local repo="${1:-$PWD}"
+  local name="oc-$(basename "$repo")"
+
+  # workaround to auth gh copilot
+  if ! sbx ls --format '{{`{{.Name}}`}}' 2>/dev/null | grep -qx "$name"; then
+    sbx create --clone --name "$name" \
+      --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo"
+    sbx exec -i "$name" sh -c \
+      'mkdir -p ~/.local/share/opencode && cat > ~/.local/share/opencode/auth.json' \
+      < ~/.local/share/opencode/auth.json
+  fi
+
+  sbx run --name "$name"
+}
+
 # Git alias completion descriptions, sourced from `git alias` itself.
 () {
   local -a cmds=( ${(f)"$(git alias --pairs 2>/dev/null)"} )
