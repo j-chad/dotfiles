@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+# {{ include "manifest/docker-compose.yml" | sha256sum }}
+# {{ include "manifest/private_dot_env.tmpl" | sha256sum }}
+
+command -v docker >/dev/null || { echo "no docker, skipping" >&2; exit 0; }
+
+cd "$HOME/manifest"
+docker compose up -d
+
+command -v sbx >/dev/null || { echo "no sbx, skipping" >&2; exit 0; }
+sbx policy allow network "localhost:2099"
+
+key="$(chezmoi secret keyring get --service=manifest --user=api-key 2>/dev/null || true)"
+if [ -n "$key" ]; then
+sbx secret set-custom -g \
+--host 'localhost' \
+--host 'host.docker.internal' \
+--env MANIFEST_API_KEY \
+--placeholder 'mnfst_sbxmanaged' \
+--value "$key"
+fi
