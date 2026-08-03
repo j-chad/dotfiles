@@ -105,3 +105,15 @@
 
     # Edit this repo's local excludes (.git/info/exclude - not committed, not shared).
     exclude = "!f() { p=\"$(git rev-parse --git-path info/exclude)\"; mkdir -p \"${p%/*}\"; \"$(git var GIT_EDITOR)\" \"$p\"; }; f"
+
+    # Export the current branch as a patch series that preserves authorship.
+    patch = "!f() { \
+        base=${1:-$(git symbolic-ref --short refs/remotes/origin/HEAD)}; \
+        out=$(git rev-parse --absolute-git-dir)/$(git symbolic-ref --short HEAD | tr / -).patch; \
+        git -c diff.mnemonicPrefix=false format-patch \"$base..HEAD\" --stdout > \"$out\" || return 1; \
+        echo \"$out\"; \
+        git log --format='  %an <%ae>' \"$base..HEAD\" | sort -u; \
+    }; f"
+
+    # Apply a patch series, keeping the original author and timestamps.
+    land = am -3 --committer-date-is-author-date
