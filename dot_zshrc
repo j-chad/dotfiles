@@ -84,24 +84,19 @@ alias ls="eza"
 
 # --- Opencode ---
 ocsbx() {
-  local repo name image
+  local repo="${1:-$PWD}"
+  local name="oc-$(basename "$repo")"
 
-    repo="$(git -C "${1:-$PWD}" rev-parse --show-toplevel 2>/dev/null)" || {
-      echo "ocsbx: not a git repo — --clone needs one" >&2; return 1
-    }
+  # workaround to auth gh copilot
+  if ! sbx ls --format '{{`{{.Name}}`}}' 2>/dev/null | grep -qx "$name"; then
+    sbx create --clone --name "$name" \
+      --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo"
+    sbx exec -i "$name" sh -c \
+      'mkdir -p ~/.local/share/opencode && cat > ~/.local/share/opencode/auth.json' \
+      < ~/.local/share/opencode/auth.json
+  fi
 
-    name="oc-$(basename "$repo")"
-    image="$(cat "$HOME/.config/opencode/.sbx-image" 2>/dev/null)"
-    [ -n "$image" ] || { echo "ocsbx: no template built — run chezmoi apply" >&2; return 1; }
-
-    curl -sf -o /dev/null --max-time 2 http://localhost:2099/ ||
-      echo "ocsbx: warning — Manifest not responding on :2099" >&2
-
-    if ! sbx ls 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$name"; then
-      sbx create --clone --name "$name" --template "$image" opencode "$repo" || return 1
-    fi
-
-    sbx run --name "$name"
+  sbx run --name "$name"
 }
 
 # Git alias completion descriptions, sourced from `git alias` itself.

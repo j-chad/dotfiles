@@ -1,110 +1,32 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "share": "disabled",
-  "autoupdate": false,
-  "theme": "everforest",
-  "plugin": ["@dietrichgebert/ponytail"],
-  "default_agent": "plan",
-  "enabled_providers": [
-    "default",
-    "utility",
-    "explore",
-    "plan",
-    "code"
-  ],
-  "provider": {
-    "default": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Default",
-      "options": {
-        "baseURL": "http://host.docker.internal:2099/v1",
-        "apiKey": "{env:MANIFEST_API_KEY}"
-      },
-      "models": { "auto": { "name": "Default" } }
-    },
-    "utility": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Utility",
-      "options": {
-        "baseURL": "http://host.docker.internal:2099/v1",
-        "apiKey": "{env:MANIFEST_API_KEY}",
-        "headers": { "x-manifest-tier": "utility" }
-      },
-      "models": { "auto": { "name": "Utility" } }
-    },
-    "explore": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Explore",
-      "options": {
-        "baseURL": "http://host.docker.internal:2099/v1",
-        "apiKey": "{env:MANIFEST_API_KEY}",
-        "headers": { "x-manifest-tier": "explore" }
-      },
-      "models": { "auto": { "name": "Explore" } }
-    },
-    "plan": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Plan",
-      "options": {
-        "baseURL": "http://host.docker.internal:2099/v1",
-        "apiKey": "{env:MANIFEST_API_KEY}",
-        "headers": { "x-manifest-tier": "plan" }
-      },
-      "models": { "auto": { "name": "Plan" } }
-    },
-    "code": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Code",
-      "options": {
-        "baseURL": "http://host.docker.internal:2099/v1",
-        "apiKey": "{env:MANIFEST_API_KEY}",
-        "headers": { "x-manifest-tier": "code" }
-      },
-      "models": { "auto": { "name": "Code" } }
-    }
+	"$schema": "https://opencode.ai/config.json",
+	"share": "disabled",
+	"autoupdate": false,
+	"theme": "everforest",
+	"default_agent": "plan",
+	"enabled_providers": [
+		"github-copilot"
+	],
+	"small_model": "github-copilot/claude-haiku-4.5",
+	"model": "github-copilot/claude-sonnet-5",
+	"permission": {
+		"*": "ask",
+		"read": { "*": "allow", "*.env": "deny", "*.env.*": "deny" },
+		"bash": "allow",
+		"task": {
+			"*": "ask",
+			"explore": "allow"
+		},
+		"glob": "allow",
+		"grep": "allow",
+		"list": "allow",
+		"todowrite": "allow",
+		"todoread": "allow",
+		"question": "allow"
   },
-  "model": "default/auto",
-  "small_model": "utility/auto",
-  "permission": {
-    "*": "ask",
-    "read": {
-      "*": "allow",
-      "*.env": "deny",
-      "*.env.*": "deny"
-    },
-    "bash": "allow",
-    "task": {
-      "*": "ask",
-      "explore": "allow"
-    },
-    "glob": "allow",
-    "grep": "allow",
-    "list": "allow",
-    "todowrite": "allow",
-    "todoread": "allow",
-    "question": "allow"
-  },
-  "agent": {
-    "explore": {
-      "model": "explore/auto"
-    },
-    "plan": {
-      "model": "plan/auto"
-    },
-    "build": {
-      "model": "code/auto"
-    },
-    "architect": {
-      "model": "plan/auto"
-    },
-    "spec": {
-      "model": "plan/auto"
-    },
-    "docs": {
-      "model": "code/auto"
-    },
-    "guide": {
-      "model": "plan/auto"
-    }
-  }
+	"agent": {
+		"explore": {
+			"model": "github-copilot/claude-haiku-4.5"
+		}
+	}
 }
