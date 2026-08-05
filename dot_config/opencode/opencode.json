@@ -37,6 +37,9 @@
 		"question": "allow"
   },
 	"agent": {
+		"plan": {
+			"model": "github-copilot/claude-opus-5"
+		},
 		"explore": {
 			"model": "github-copilot/claude-haiku-4.5"
 		}
