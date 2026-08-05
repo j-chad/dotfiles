@@ -89,7 +89,7 @@ ocsbx() {
 
   # workaround to auth gh copilot
   if ! sbx ls --format '{{`{{.Name}}`}}' 2>/dev/null | grep -qx "$name"; then
-    sbx create --clone --name "$name" \
+    sbx create --name "$name" \
       --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo"
     sbx exec -i "$name" sh -c \
       'mkdir -p ~/.local/share/opencode && cat > ~/.local/share/opencode/auth.json' \
