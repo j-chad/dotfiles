@@ -96,10 +96,6 @@ ocsbx() {
     sbx create --name "$name" \
       --no-share-skills \
       --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo" || return
-    # workaround to auth gh copilot
-    sbx exec -i "$name" sh -c \
-      'mkdir -p ~/.local/share/opencode && cat > ~/.local/share/opencode/auth.json' \
-      < ~/.local/share/opencode/auth.json
   fi
 
   sbx run --name "$name"
