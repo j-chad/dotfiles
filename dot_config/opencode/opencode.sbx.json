@@ -4,10 +4,8 @@
 	"autoupdate": false,
 	"theme": "everforest",
 	"default_agent": "plan",
-	"enabled_providers": [
-		"github-copilot"
-	],
-	"small_model": "github-copilot/claude-haiku-4.5",
+	"enabled_providers": ["github-copilot"],
+	"small_model": "github-copilot/gpt-5.6-luna",
 	"model": "github-copilot/claude-sonnet-5",
 	"permission": {
 		"*": "ask",
@@ -25,8 +23,14 @@
 		"question": "allow"
   },
 	"agent": {
+		"plan": { "model": "github-copilot/claude-opus-5" },
+		"architect": { "model": "github-copilot/claude-opus-5" },
+		"guide": { "model": "github-copilot/claude-opus-5" },
+		"spec": { "model": "github-copilot/claude-sonnet-5" },
+		"build": { "model": "github-copilot/claude-sonnet-5" },
 		"explore": {
-			"model": "github-copilot/claude-haiku-4.5"
+			"model": "github-copilot/gpt-5.6-luna",
+			"variant": "max"
 		}
 	}
 }
