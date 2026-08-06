@@ -82,7 +82,7 @@
     whoami = config user.email
 
     # List local branches sorted by most recently committed to.
-    recent = "!bash ~/.config/git/switch_recent.sh"
+    recent = "!bash ~/.config/git/bin/switch_recent.sh"
 
 	# Update the current branch with the latest changes from the default branch.
     up = "!f() { \
@@ -92,16 +92,16 @@
 	}; f"
 
 	# List all git aliases.
-	alias = "!bash ~/.config/git/aliases.sh"
+	alias = "!bash ~/.config/git/bin/aliases.sh"
 
 	# Create a pull request for the current branch.
-	pr = "!bash ~/.config/git/pr.sh"
+	pr = "!bash ~/.config/git/bin/pr.sh"
 
     # Delete local branches whose PR has been merged or closed.
-    sweep = "!bash ~/.config/git/sweep.sh"
+    sweep = "!bash ~/.config/git/bin/sweep.sh"
 
     # Pick a Jira ticket assigned to me and start a branch for it.
-    ticket = "!bash ~/.config/git/ticket.sh"
+    ticket = "!bash ~/.config/git/bin/ticket.sh"
 
     # Edit this repo's local excludes (.git/info/exclude - not committed, not shared).
     exclude = "!f() { p=\"$(git rev-parse --git-path info/exclude)\"; mkdir -p \"${p%/*}\"; \"$(git var GIT_EDITOR)\" \"$p\"; }; f"
