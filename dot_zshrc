@@ -86,11 +86,17 @@ alias ls="eza"
 ocsbx() {
   local repo="${1:-$PWD}"
   local name="oc-$(basename "$repo")"
+  local log() { print -u2 -- "[ocsbx] $*" }
 
-  # workaround to auth gh copilot
-  if ! sbx ls --format '{{`{{.Name}}`}}' 2>/dev/null | grep -qx "$name"; then
+  if sbx ls --json 2>/dev/null \
+     | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
+    log "sandbox '$name' already exists, skipping creation"
+  else
+    log "creating sandbox '$name' for repo '$repo'"
     sbx create --name "$name" \
-      --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo"
+      --no-share-skills \
+      --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo" || return
+    # workaround to auth gh copilot
     sbx exec -i "$name" sh -c \
       'mkdir -p ~/.local/share/opencode && cat > ~/.local/share/opencode/auth.json' \
       < ~/.local/share/opencode/auth.json
