@@ -2,14 +2,20 @@
 	"$schema": "https://opencode.ai/config.json",
 	"share": "disabled",
 	"autoupdate": false,
-	"theme": "everforest",
 	"default_agent": "plan",
-	"enabled_providers": ["github-copilot"],
+	"enabled_providers": [
+		"github-copilot"
+	],
 	"small_model": "github-copilot/gpt-5.6-luna",
 	"model": "github-copilot/claude-sonnet-5",
+	"subagent_depth": 2,
 	"permission": {
 		"*": "ask",
-		"read": { "*": "allow", "*.env": "deny", "*.env.*": "deny" },
+		"read": {
+			"*": "allow",
+			"*.env": "deny",
+			"*.env.*": "deny"
+		},
 		"bash": "allow",
 		"task": {
 			"*": "ask",
@@ -20,17 +26,29 @@
 		"list": "allow",
 		"todowrite": "allow",
 		"todoread": "allow",
-		"question": "allow"
-  },
+		"question": "allow",
+		"external_directory": "allow"
+	},
 	"agent": {
-		"plan": { "model": "github-copilot/claude-opus-5" },
-		"architect": { "model": "github-copilot/claude-opus-5" },
-		"guide": { "model": "github-copilot/claude-opus-5" },
-		"spec": { "model": "github-copilot/claude-sonnet-5" },
-		"build": { "model": "github-copilot/claude-sonnet-5" },
+		"plan": {
+			"model": "github-copilot/claude-opus-5"
+		},
+		"architect": {
+			"model": "github-copilot/claude-opus-5"
+		},
+		"guide": {
+			"model": "github-copilot/claude-opus-5"
+		},
+		"spec": {
+			"model": "github-copilot/claude-sonnet-5"
+		},
+		"build": {
+			"model": "github-copilot/claude-sonnet-5"
+		},
 		"explore": {
 			"model": "github-copilot/gpt-5.6-luna",
-			"variant": "max"
+			"variant": "xhigh"
 		}
-	}
+	},
+	"lsp": true
 }
