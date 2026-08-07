@@ -1,0 +1,29 @@
+#!/usr/bin/env zsh
+# ocsbx - create or run a sandbox for an OpenCode repository
+set -euo pipefail
+
+repo="${1:-$PWD}"
+name="oc-$(basename "$repo")"
+
+gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
+
+log() { print -u2 -- "[ocsbx] $*"; }
+
+if sbx ls --json 2>/dev/null \
+   | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
+  log "sandbox '$name' already exists, skipping creation"
+else
+  log "creating sandbox '$name' for repo '$repo'"
+  sbx create --name "$name" \
+    --no-share-skills \
+    --template "$(cat ~/.config/opencode/.sbx-image)" \
+    opencode "$repo" ${gomodcache:+"${gomodcache}:ro"}
+
+  if [[ -n "$gomodcache" ]]; then
+		log "configuring GOPROXY for sandbox '$name' to use local Go module cache at '$gomodcache'"
+    sbx exec -d "$name" bash -c \
+      "echo 'export GOPROXY=file://${gomodcache}/cache/download,https://proxy.golang.org,direct' >> /etc/sandbox-persistent.sh"
+  fi
+fi
+
+sbx run --name "$name"

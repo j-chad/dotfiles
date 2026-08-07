@@ -50,5 +50,13 @@
 			"variant": "xhigh"
 		}
 	},
-	"lsp": true
+	"lsp": true,
+	"mcp": {
+		"mcp-gateway": {
+			"type": "remote",
+			"url": "http://mcp-gateway.docker.internal/mcp",
+			"enabled": true,
+			"headers": { "Authorization": "Bearer proxy-managed" }
+		}
+	}
 }

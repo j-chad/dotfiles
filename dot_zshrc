@@ -82,25 +82,6 @@ alias g="git"
 compdef g=git
 alias ls="eza"
 
-# --- Opencode ---
-ocsbx() {
-  local repo="${1:-$PWD}"
-  local name="oc-$(basename "$repo")"
-  local log() { print -u2 -- "[ocsbx] $*" }
-
-  if sbx ls --json 2>/dev/null \
-     | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
-    log "sandbox '$name' already exists, skipping creation"
-  else
-    log "creating sandbox '$name' for repo '$repo'"
-    sbx create --name "$name" \
-      --no-share-skills \
-      --template "$(cat ~/.config/opencode/.sbx-image)" opencode "$repo" || return
-  fi
-
-  sbx run --name "$name"
-}
-
 # Git alias completion descriptions, sourced from `git alias` itself.
 () {
   local -a cmds=( ${(f)"$(git alias --pairs 2>/dev/null)"} )
