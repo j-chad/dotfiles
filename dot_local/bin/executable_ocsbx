@@ -5,7 +5,11 @@ set -euo pipefail
 repo="${1:-$PWD}"
 name="oc-$(basename "$repo")"
 
-gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
+# Only add gomodcache if the repo has a go.mod file
+gomodcache=""
+if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' -print -quit)" ]]; then
+  gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
+fi
 
 log() { print -u2 -- "[ocsbx] $*"; }
 
@@ -17,7 +21,9 @@ else
   sbx create --name "$name" \
     --no-share-skills \
     --template "$(cat ~/.config/opencode/.sbx-image)" \
-    opencode "$repo" ${gomodcache:+"${gomodcache}:ro"}
+    opencode\
+    "$repo"\
+    ${gomodcache:+"${gomodcache}:ro"}
 
   if [[ -n "$gomodcache" ]]; then
 		log "configuring GOPROXY for sandbox '$name' to use local Go module cache at '$gomodcache'"
