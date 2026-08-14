@@ -16,7 +16,7 @@
 			"*.env": "deny",
 			"*.env.*": "deny"
 		},
-		"bash": "allow",
+		"bash": "ask",
 		"task": {
 			"*": "ask",
 			"explore": "allow"
