@@ -15,13 +15,11 @@ set -euo pipefail
     #   {{ . }}
 {{- end }}
 
-LABEL="opencode-sbx"
-IMAGE="$LABEL:{{ $tag }}"
+NAME="opencode-sbx"
+IMAGE="$NAME:{{ $tag }}"
 
 command -v docker >/dev/null || { echo "no docker, skipping" >&2; exit 0; }
 command -v sbx    >/dev/null || { echo "no sbx, skipping"    >&2; exit 0; }
-
-docker prune -filter "label=$LABEL" --force || true
 
 cd {{ $dir | quote }}
 docker build -t "$IMAGE" .
@@ -33,3 +31,32 @@ sbx template load "$tar"
 
 printf '%s\n' "$IMAGE" > "$HOME/.config/opencode/.sbx-image"
 echo "loaded $IMAGE"
+
+# ---- prune stale images ----
+echo "pruning stale images..."
+keep="$IMAGE"
+unknown=0
+while read -r sandbox; do
+	[ -n "$sandbox" ] || continue
+	ref="$(sbx inspect "$sandbox" --json 2>/dev/null | jq -r '.image // empty')"
+	if [ -z "$ref" ]; then
+		echo "unknown image for sandbox '$sandbox', skipping prune" >&2
+		unknown=1
+		break
+	fi
+	keep="$keep"$'\n'"$ref"
+done <<< "$(sbx ls --json 2>/dev/null | jq -r '.sandboxes[]?.name')"
+
+if [ "$unknown" -eq 0 ]; then
+	sbx template ls --json \
+		| jq -r --arg n "$NAME" \
+			'.images[]? | select(.repository | endswith("/" + $n)) | $n + ":" + .tag' \
+		| grep -vxF "$keep" \
+		| while read -r ref; do sbx template rm "$ref" || true; done \
+		|| true
+
+	docker image ls "$NAME" --format {{ `'{{.Repository}}:{{.Tag}}'` }} \
+		| grep -vxF "$keep" \
+		| while read -r ref; do docker image rm "$ref" || true; done \
+		|| true
+fi
