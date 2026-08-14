@@ -15,10 +15,13 @@ set -euo pipefail
     #   {{ . }}
 {{- end }}
 
-IMAGE="opencode-sbx:{{ $tag }}"
+LABEL="opencode-sbx"
+IMAGE="$LABEL:{{ $tag }}"
 
 command -v docker >/dev/null || { echo "no docker, skipping" >&2; exit 0; }
 command -v sbx    >/dev/null || { echo "no sbx, skipping"    >&2; exit 0; }
+
+docker prune -filter "label=$LABEL" --force || true
 
 cd {{ $dir | quote }}
 docker build -t "$IMAGE" .

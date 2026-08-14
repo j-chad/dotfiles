@@ -2,34 +2,78 @@
 # ocsbx - create or run a sandbox for an OpenCode repository
 set -euo pipefail
 
-repo="${1:-$PWD}"
-name="oc-$(basename "$repo")"
+readonly ATUIN_SOCK="/tmp/atuin-oc/atuin.sock"
+readonly IMAGE_FILE="$HOME/.config/opencode/.sbx-image"
 
-# Only add gomodcache if the repo has a go.mod file
+log() { print -ru2 -- "[ocsbx] $*" }
+
+# Resolve to an absolute path so `ocsbx .` doesn't produce the name "oc-."
+repo="${${1:-$PWD}:A}"
+# sbx names allow only letters, numbers, hyphens, periods and plus/minus
+name="oc-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
+
+[[ -r $IMAGE_FILE ]] || {
+	log "no $IMAGE_FILE - run 'chezmoi apply' to build the sandbox image"
+	exit 1
+}
+image="$(<$IMAGE_FILE)"
+
+mounts=()
+
 gomodcache=""
+# Share the host Go module cache, but only for repos that actually use Go
 if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' -print -quit)" ]]; then
-  gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
+	gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
+	[[ -n $gomodcache ]] && mounts+=("$gomodcache:ro")
 fi
 
-log() { print -u2 -- "[ocsbx] $*"; }
+create_sandbox() {
+	log "creating sandbox '$name' for repo '$repo'"
+	sbx create --name "$name" \
+		--no-share-skills \
+		--template "$image" \
+		opencode \
+		"$repo" \
+		"${mounts[@]}"
 
-if sbx ls --json 2>/dev/null \
-   | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
-  log "sandbox '$name' already exists, skipping creation"
+	if [[ -n $gomodcache ]]; then
+		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
+		sbx exec -d "$name" bash -c \
+			"echo 'export GOPROXY=file://${gomodcache}/cache/download,https://proxy.golang.org,direct' >> /etc/sandbox-persistent.sh"
+	fi
+}
+
+# `sbx inspect` is undocumented; an empty result means "unknown", never "stale"
+sandbox_image() { sbx inspect "$name" --json 2>/dev/null | jq -r '.image // empty' }
+
+sandbox_workspaces() {
+	sbx ls --json 2>/dev/null \
+		| jq -r --arg n "$name" '.sandboxes[]? | select(.name == $n) | .workspaces[]'
+}
+
+if ! sbx ls --json 2>/dev/null | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
+	create_sandbox
 else
-  log "creating sandbox '$name' for repo '$repo'"
-  sbx create --name "$name" \
-    --no-share-skills \
-    --template "$(cat ~/.config/opencode/.sbx-image)" \
-    opencode\
-    "$repo"\
-    ${gomodcache:+"${gomodcache}:ro"}
+	reasons=()
 
-  if [[ -n "$gomodcache" ]]; then
-		log "configuring GOPROXY for sandbox '$name' to use local Go module cache at '$gomodcache'"
-    sbx exec -d "$name" bash -c \
-      "echo 'export GOPROXY=file://${gomodcache}/cache/download,https://proxy.golang.org,direct' >> /etc/sandbox-persistent.sh"
-  fi
+	current="$(sandbox_image)"
+	[[ -n $current && $current != $image ]] && reasons+=("image is outdated ($current -> $image)")
+
+	want="${(F)${(o)$(print -rl -- "$repo" "${mounts[@]}")}}"
+	have="${(F)${(o)$(sandbox_workspaces)}}"
+	[[ $want != $have ]] && reasons+=("mounts have changed")
+
+	if (( $#reasons )); then
+		log "sandbox '$name' is out of date: ${(j:, :)reasons}"
+		if [[ -t 0 ]] && read -q "?[ocsbx] Recreate it? Container-local state will be lost (y/N) "; then
+			print
+			sbx rm --force "$name"
+			create_sandbox
+		else
+			print
+			log "keeping the existing sandbox"
+		fi
+	fi
 fi
 
 sbx run --name "$name"
