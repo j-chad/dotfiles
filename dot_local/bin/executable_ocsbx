@@ -2,7 +2,6 @@
 # ocsbx - create or run a sandbox for an OpenCode repository
 set -euo pipefail
 
-readonly ATUIN_SOCK="/tmp/atuin-oc/atuin.sock"
 readonly IMAGE_FILE="$HOME/.config/opencode/.sbx-image"
 
 log() { print -ru2 -- "[ocsbx] $*" }
