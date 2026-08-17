@@ -2,20 +2,32 @@
 # ocsbx - create or run a sandbox for an OpenCode repository
 set -euo pipefail
 
-readonly IMAGE_FILE="$HOME/.config/opencode/.sbx-image"
+readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
+readonly KIT_DIR="agents/oc"
+readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
 
-log() { print -ru2 -- "[ocsbx] $*" }
+log() { print -ru2 -- "[ocsbx] $*"; }
 
 # Resolve to an absolute path so `ocsbx .` doesn't produce the name "oc-."
 repo="${${1:-$PWD}:A}"
 # sbx names allow only letters, numbers, hyphens, periods and plus/minus
 name="oc-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
 
-[[ -r $IMAGE_FILE ]] || {
-	log "no $IMAGE_FILE - run 'chezmoi apply' to build the sandbox image"
-	exit 1
+# Latest tag, falling back to `main` if there are no tags yet or the remote
+# is unreachable (offline: reuse whatever ref the sandbox already has).
+latest_kit_ref() {
+	local tags
+	local -a tag_list
+	tags="$(git ls-remote --tags --refs "$KIT_REPO" 2>/dev/null | sed 's#.*refs/tags/##' | sort -V)" || return 1
+	tag_list=(${(f)tags})
+	(( $#tag_list )) && print -r -- "${tag_list[-1]}" || print -r -- "main"
 }
-image="$(<$IMAGE_FILE)"
+
+ref="$(latest_kit_ref)" || {
+	log "could not reach $KIT_REPO to resolve the latest kit ref"
+	ref=""
+}
+kit="git+${KIT_REPO}#ref=${ref:-main}&dir=${KIT_DIR}"
 
 mounts=()
 
@@ -27,23 +39,32 @@ if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' 
 fi
 
 create_sandbox() {
-	log "creating sandbox '$name' for repo '$repo'"
+	log "creating sandbox '$name' for repo '$repo' (kit ref: ${ref:-main})"
 	sbx create --name "$name" \
 		--no-share-skills \
-		--template "$image" \
-		opencode \
+		--kit "$kit" \
+		oc \
 		"$repo" \
 		"${mounts[@]}"
+
+	if [[ -n $ref ]]; then
+		sbx exec -d "$name" bash -c "echo ${(q)ref} > ${KIT_REF_MARKER}"
+	fi
 
 	if [[ -n $gomodcache ]]; then
 		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
 		sbx exec -d "$name" bash -c \
 			"echo 'export GOPROXY=file://${gomodcache}/cache/download,https://proxy.golang.org,direct' >> /etc/sandbox-persistent.sh"
 	fi
+
+	# Wire in the atuin mixin here once the host-side atuin-sbx-listen
+	# service exists, e.g.:
+	#   --kit "git+${KIT_REPO}#ref=${ref:-main}&dir=mixins/atuin"
 }
 
-# `sbx inspect` is undocumented; an empty result means "unknown", never "stale"
-sandbox_image() { sbx inspect "$name" --json 2>/dev/null | jq -r '.image // empty' }
+sandbox_kit_ref() {
+	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null
+}
 
 sandbox_workspaces() {
 	sbx ls --json 2>/dev/null \
@@ -55,8 +76,10 @@ if ! sbx ls --json 2>/dev/null | jq -e --arg n "$name" '.sandboxes[]? | select(.
 else
 	reasons=()
 
-	current="$(sandbox_image)"
-	[[ -n $current && $current != $image ]] && reasons+=("image is outdated ($current -> $image)")
+	if [[ -n $ref ]]; then
+		current="$(sandbox_kit_ref)"
+		[[ -n $current && $current != "$ref" ]] && reasons+=("kit is outdated ($current -> $ref)")
+	fi
 
 	want="${(F)${(o)$(print -rl -- "$repo" "${mounts[@]}")}}"
 	have="${(F)${(o)$(sandbox_workspaces)}}"
