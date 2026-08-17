@@ -9,33 +9,108 @@ readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
 
 log() { print -ru2 -- "[ocsbx] $*"; }
 
+trap 'log "aborted: command failed at line $LINENO"' ERR
+
 # Resolve to an absolute path so `ocsbx .` doesn't produce the name "oc-."
 repo="${${1:-$PWD}:A}"
 # sbx names allow only letters, numbers, hyphens, periods and plus/minus
 name="oc-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
 
-# Latest tag for a per-component prefix (e.g. "agents/oc"), falling back to
-# `main` if there are no tags yet or the remote is unreachable (offline:
-# reuse whatever ref the sandbox already has). Tags are per-component
-# ("agents/oc/vX.Y.Z"), so filter by prefix before sorting, then re-add it.
-latest_kit_ref() {
-	local prefix="$1" tags
-	local -a tag_list
-	tags="$(git ls-remote --tags --refs "$KIT_REPO" 2>/dev/null | sed 's#.*refs/tags/##' | grep "^${prefix}/" | sed "s#^${prefix}/##" | sort -V)" || return 1
-	tag_list=(${(f)tags})
-	(( $#tag_list )) && print -r -- "${prefix}/${tag_list[-1]}" || print -r -- "main"
+# Version-sort that works with both GNU sort (`-V`) and the BSD sort shipped
+# on macOS, which has no `-V` at all. Prefers a GNU sort if one is on PATH
+# (e.g. coreutils' `gsort`), otherwise falls back to a manual numeric-field
+# sort good enough for plain `vX.Y.Z` tags.
+version_sort() {
+	if gsort --version 2>/dev/null | grep -q GNU; then
+		gsort -V
+	elif sort --version 2>/dev/null | grep -q GNU; then
+		sort -V
+	else
+		awk '{
+			orig = $0
+			s = $0
+			gsub(/^v/, "", s)
+			n = split(s, a, ".")
+			key = ""
+			for (i = 1; i <= 3; i++) key = key sprintf("%010d.", (i <= n ? a[i] + 0 : 0))
+			print key, orig
+		}' | sort | cut -d' ' -f2-
+	fi
 }
 
-oc_ref="$(latest_kit_ref "$OC_DIR")" || {
-	log "could not reach $KIT_REPO to resolve the latest $OC_DIR ref"
-	oc_ref=""
-}
-atuin_ref="$(latest_kit_ref "$ATUIN_DIR")" || {
-	log "could not reach $KIT_REPO to resolve the latest $ATUIN_DIR ref"
-	atuin_ref=""
-}
-oc_kit="git+${KIT_REPO}#ref=${oc_ref:-main}&dir=${OC_DIR}"
-atuin_kit="git+${KIT_REPO}#ref=${atuin_ref:-main}&dir=${ATUIN_DIR}"
+# Single unauthenticated fetch of every tag and branch head. Fetched once
+# (not once per component) and with the `insteadOf` github/gitlab -> ssh
+# rewrite in ~/.gitconfig disabled, so this never triggers an SSH key
+# prompt for what is just an anonymous read of a public repo.
+#
+# Deliberately not `--refs`: that would exclude the `^{}` peeled entries,
+# which is exactly what's needed to resolve an annotated tag to the commit
+# it points at rather than the tag object.
+remote_refs="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 \
+	git ls-remote --tags --heads "$KIT_REPO" 2>/dev/null)" || remote_refs=""
+
+if [[ -z $remote_refs ]]; then
+	log "could not reach $KIT_REPO; skipping kit-freshness check and reusing whatever the sandbox already has"
+	oc_ref="" oc_sha=""
+	atuin_ref="" atuin_sha=""
+else
+	typeset -A refmap
+	while IFS=$'\t' read -r sha refname; do
+		[[ -n $refname ]] && refmap[$refname]="$sha"
+	done <<< "$remote_refs"
+
+	# Resolves a tag or branch name to the commit SHA it points at. Remote
+	# refs, not local ones, are pinned -- so a moved tag or an advancing
+	# `main` is detected as staleness rather than compared as equal forever.
+	# Preferring the peeled `^{}` entry is what makes an annotated tag
+	# resolve to the commit it points to rather than the tag object itself.
+	resolve_ref_sha() {
+		local ref="$1"
+		# Build the keys in variables first: zsh's brace-matching inside a
+		# `${map[...]}` subscript gets confused by a literal `^{}` in the
+		# expression itself.
+		local peeled_key="refs/tags/${ref}^{}"
+		local tag_key="refs/tags/${ref}"
+		local head_key="refs/heads/${ref}"
+		if [[ -n ${refmap[$peeled_key]:-} ]]; then
+			print -r -- "${refmap[$peeled_key]}"
+		elif [[ -n ${refmap[$tag_key]:-} ]]; then
+			print -r -- "${refmap[$tag_key]}"
+		elif [[ -n ${refmap[$head_key]:-} ]]; then
+			print -r -- "${refmap[$head_key]}"
+		else
+			return 1
+		fi
+	}
+
+	# Latest tag for a per-component prefix (e.g. "agents/oc"). Tags are
+	# per-component ("agents/oc/vX.Y.Z"), so filter by prefix before sorting,
+	# then re-add it. No tags yet for a component -> fall back to `main`.
+	latest_kit_ref() {
+		local prefix="$1"
+		local -a tag_list
+		tag_list=(${(f)"$(print -r -- "$remote_refs" \
+			| awk -F'\t' '$2 ~ /^refs\/tags\// && $2 !~ /\^\{\}$/ {print $2}' \
+			| sed 's#^refs/tags/##' \
+			| grep "^${prefix}/" \
+			| sed "s#^${prefix}/##" \
+			| version_sort)"})
+		(( $#tag_list )) && print -r -- "${prefix}/${tag_list[-1]}" || print -r -- "main"
+	}
+
+	oc_ref="$(latest_kit_ref "$OC_DIR")"
+	atuin_ref="$(latest_kit_ref "$ATUIN_DIR")"
+	oc_sha="$(resolve_ref_sha "$oc_ref")" || {
+		log "could not resolve '$oc_ref' to a commit; falling back to unpinned '$oc_ref'"
+		oc_sha=""
+	}
+	atuin_sha="$(resolve_ref_sha "$atuin_ref")" || {
+		log "could not resolve '$atuin_ref' to a commit; falling back to unpinned '$atuin_ref'"
+		atuin_sha=""
+	}
+fi
+oc_kit="git+${KIT_REPO}#ref=${oc_sha:-${oc_ref:-main}}&dir=${OC_DIR}"
+atuin_kit="git+${KIT_REPO}#ref=${atuin_sha:-${atuin_ref:-main}}&dir=${ATUIN_DIR}"
 
 mounts=()
 
@@ -47,7 +122,7 @@ if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' 
 fi
 
 create_sandbox() {
-	log "creating sandbox '$name' for repo '$repo' (oc ref: ${oc_ref:-main}, atuin ref: ${atuin_ref:-main})"
+	log "creating sandbox '$name' for repo '$repo' (oc: ${oc_ref:-main} @ ${oc_sha:-unpinned}, atuin: ${atuin_ref:-main} @ ${atuin_sha:-unpinned})"
 	sbx create --name "$name" \
 		--no-share-skills \
 		--kit "$oc_kit" \
@@ -56,7 +131,10 @@ create_sandbox() {
 		"$repo" \
 		"${mounts[@]}"
 
-	sbx exec -d "$name" bash -c "printf '%s\n%s\n' ${(q)oc_ref:-main} ${(q)atuin_ref:-main} > ${KIT_REF_MARKER}"
+	# Marker records the commit SHA actually pinned (falling back to the
+	# human-readable ref if resolution failed), not just the tag name --
+	# comparing SHAs is what catches a moved tag or an advanced `main`.
+	sbx exec -d "$name" bash -c "printf '%s\n%s\n' ${(q)oc_sha:-${(q)oc_ref:-main}} ${(q)atuin_sha:-${(q)atuin_ref:-main}} > ${KIT_REF_MARKER}"
 
 	if [[ -n $gomodcache ]]; then
 		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
@@ -65,17 +143,22 @@ create_sandbox() {
 	fi
 }
 
-# Prints "<oc_ref>\n<atuin_ref>" as recorded in the running sandbox.
+# Prints "<oc_ref>\n<atuin_ref>" as recorded in the running sandbox. Empty
+# (rather than aborting the script) if the sandbox is stopped, unreachable,
+# or predates the marker file existing.
 sandbox_kit_refs() {
-	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null
+	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null || true
 }
 
-sandbox_workspaces() {
-	sbx ls --json 2>/dev/null \
-		| jq -r --arg n "$name" '.sandboxes[]? | select(.name == $n) | .workspaces[]'
-}
+# Fetch `sbx ls --json` exactly once, and fail loudly on a real `sbx`
+# failure rather than misreading it as "sandbox doesn't exist" (which would
+# otherwise walk straight into recreating it).
+if ! sbx_ls_json="$(sbx ls --json 2>&1)"; then
+	log "sbx ls failed, cannot continue: $sbx_ls_json"
+	exit 1
+fi
 
-if ! sbx ls --json 2>/dev/null | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
+if ! print -r -- "$sbx_ls_json" | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
 	create_sandbox
 else
 	reasons=()
@@ -83,11 +166,20 @@ else
 	current="$(sandbox_kit_refs)"
 	current_oc="${${(f)current}[1]}"
 	current_atuin="${${(f)current}[2]}"
-	[[ -n $current_oc && $current_oc != "${oc_ref:-main}" ]] && reasons+=("oc kit is outdated ($current_oc -> ${oc_ref:-main})")
-	[[ -n $current_atuin && $current_atuin != "${atuin_ref:-main}" ]] && reasons+=("atuin kit is outdated ($current_atuin -> ${atuin_ref:-main})")
+	if [[ -z $oc_sha && -z $atuin_sha ]]; then
+		log "kit refs unresolved (offline earlier); skipping kit-freshness check"
+	elif [[ -z $current_oc && -z $current_atuin ]]; then
+		# No marker at all: either predates the marker being introduced, or the
+		# write failed after create. Either way its kit version is unknown, not
+		# "current" -- treat it as stale so it gets a marker on next recreate.
+		reasons+=("kit version unknown (no marker found)")
+	else
+		[[ -n $current_oc && $current_oc != "${oc_sha:-${oc_ref:-main}}" ]] && reasons+=("oc kit is outdated ($current_oc -> ${oc_sha:-${oc_ref:-main}})")
+		[[ -n $current_atuin && $current_atuin != "${atuin_sha:-${atuin_ref:-main}}" ]] && reasons+=("atuin kit is outdated ($current_atuin -> ${atuin_sha:-${atuin_ref:-main}})")
+	fi
 
 	want="${(F)${(o)$(print -rl -- "$repo" "${mounts[@]}")}}"
-	have="${(F)${(o)$(sandbox_workspaces)}}"
+	have="${(F)${(o)$(print -r -- "$sbx_ls_json" | jq -r --arg n "$name" '.sandboxes[]? | select(.name == $n) | .workspaces[]')}}"
 	[[ $want != $have ]] && reasons+=("mounts have changed")
 
 	if (( $#reasons )); then
