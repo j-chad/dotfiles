@@ -8,10 +8,20 @@
 	<array>
 		<string>{{ .chezmoi.homeDir }}/go/bin/atuin-sbx-listen</string>
 	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:{{ .chezmoi.homeDir }}/go/bin:/usr/bin:/bin</string>
+	</dict>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
 	<true/>
+	<!-- launchd may start this before the atuin daemon (autostarted from
+	     shell init) is up; ThrottleInterval caps the resulting respawn loop
+	     rather than hammering it every few ms. -->
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
 	<key>StandardOutPath</key>
 	<string>{{ .chezmoi.homeDir }}/Library/Logs/atuin-sbx-listen.log</string>
 	<key>StandardErrorPath</key>

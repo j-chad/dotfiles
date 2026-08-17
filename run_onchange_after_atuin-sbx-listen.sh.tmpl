@@ -1,0 +1,37 @@
+{{- $plist := printf "%s/Library/LaunchAgents/dev.jacksonc.atuin-sbx-listen.plist" .chezmoi.homeDir -}}
+#!/bin/sh
+# Installs the atuin-sbx-listen host binary and (re)loads its service.
+# Runs after_ all files/dirs/symlinks, so the plist above is guaranteed to
+# already be on disk by the time this executes (see
+# .opencode/plans/atuin-sbx-mixin-host.md). Content changes (the pinned
+# VERSION below) drive re-runs via run_onchange_.
+set -eu
+
+readonly VERSION="v1.0.0"
+
+if [ "$(id -u)" -eq 0 ]; then
+	echo "do not run 'chezmoi apply' with sudo; skipping atuin-sbx-listen" >&2
+	exit 1
+fi
+
+command -v go >/dev/null 2>&1 || { echo "no go, skipping atuin-sbx-listen install" >&2; exit 0; }
+
+go install "gitlab.com/j-chad/sbx/host/atuin-listen/cmd/atuin-sbx-listen@${VERSION}"
+echo "installed atuin-sbx-listen@${VERSION}"
+
+{{ if eq .chezmoi.os "darwin" -}}
+readonly PLIST="{{ $plist }}"
+readonly LABEL="gui/$(id -u)/dev.jacksonc.atuin-sbx-listen"
+
+launchctl bootout "$LABEL" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
+echo "reloaded atuin-sbx-listen LaunchAgent"
+{{ else if eq .chezmoi.os "linux" -}}
+if command -v systemctl >/dev/null 2>&1; then
+	systemctl --user daemon-reload
+	systemctl --user enable --now atuin-sbx-listen.service
+	echo "enabled atuin-sbx-listen systemd service"
+else
+	echo "no systemctl, skipping atuin-sbx-listen service" >&2
+fi
+{{- end }}
