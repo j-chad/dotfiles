@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+{{ if eq .chezmoi.os "darwin" -}}
+# (Re)loads the atuin-sbx-listen LaunchAgent after the plist or binary
+# changes. Bootout is expected to fail the first time (nothing loaded yet).
+
+readonly PLIST="$HOME/Library/LaunchAgents/dev.jacksonc.atuin-sbx-listen.plist"
+readonly LABEL="gui/$(id -u)/dev.jacksonc.atuin-sbx-listen"
+
+launchctl bootout "$LABEL" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
+echo "reloaded atuin-sbx-listen LaunchAgent"
+{{ else if eq .chezmoi.os "linux" -}}
+# Reloads and (re)enables the atuin-sbx-listen systemd user service after the
+# unit file or binary changes.
+
+command -v systemctl >/dev/null 2>&1 || { echo "no systemctl, skipping atuin-sbx-listen service" >&2; exit 0; }
+
+systemctl --user daemon-reload
+systemctl --user enable --now atuin-sbx-listen.service
+echo "enabled atuin-sbx-listen systemd service"
+{{- end }}

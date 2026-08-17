@@ -1,0 +1,6 @@
+{{ if ne .chezmoi.os "darwin" -}}
+Library/LaunchAgents/dev.jacksonc.atuin-sbx-listen.plist
+{{ end -}}
+{{ if ne .chezmoi.os "linux" -}}
+dot_config/systemd/user/atuin-sbx-listen.service
+{{ end -}}

@@ -5,3 +5,7 @@ filter_mode = "workspace"
 
 [ai]
 enabled = false
+
+[daemon]
+enabled = true
+autostart = true
