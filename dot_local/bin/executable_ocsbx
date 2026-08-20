@@ -5,6 +5,7 @@ set -euo pipefail
 readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
 readonly OC_DIR="agents/oc"
 readonly ATUIN_DIR="mixins/atuin"
+readonly BASH_FRISK_DIR="mixins/bash-frisk"
 readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
 
 log() { print -ru2 -- "[ocsbx] $*"; }
@@ -100,6 +101,7 @@ else
 
 	oc_ref="$(latest_kit_ref "$OC_DIR")"
 	atuin_ref="$(latest_kit_ref "$ATUIN_DIR")"
+	bash_frisk_ref="$(latest_kit_ref "$BASH_FRISK_DIR")"
 	oc_sha="$(resolve_ref_sha "$oc_ref")" || {
 		log "could not resolve '$oc_ref' to a commit; falling back to unpinned '$oc_ref'"
 		oc_sha=""
@@ -108,9 +110,14 @@ else
 		log "could not resolve '$atuin_ref' to a commit; falling back to unpinned '$atuin_ref'"
 		atuin_sha=""
 	}
+	bash_frisk_sha="$(resolve_ref_sha "$bash_frisk_ref")" || {
+		log "could not resolve '$bash_frisk_ref' to a commit; falling back to unpinned '$bash_frisk_ref'"
+		bash_frisk_sha=""
+	}
 fi
 oc_kit="git+${KIT_REPO}#ref=${oc_sha:-${oc_ref:-main}}&dir=${OC_DIR}"
 atuin_kit="git+${KIT_REPO}#ref=${atuin_sha:-${atuin_ref:-main}}&dir=${ATUIN_DIR}"
+bash_frisk_kit="git+${KIT_REPO}#ref=${bash_frisk_sha:-${bash_frisk_ref:-main}}&dir=${BASH_FRISK_DIR}"
 
 mounts=()
 
@@ -122,11 +129,12 @@ if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' 
 fi
 
 create_sandbox() {
-	log "creating sandbox '$name' for repo '$repo' (oc: ${oc_ref:-main} @ ${oc_sha:-unpinned}, atuin: ${atuin_ref:-main} @ ${atuin_sha:-unpinned})"
+	log "creating sandbox '$name' for repo '$repo' (oc: ${oc_ref:-main} @ ${oc_sha:-unpinned}, atuin: ${atuin_ref:-main} @ ${atuin_sha:-unpinned}, bash-frisk: ${bash_frisk_ref:-main} @ ${bash_frisk_sha:-unpinned})"
 	sbx create --name "$name" \
 		--no-share-skills \
 		--kit "$oc_kit" \
 		--kit "$atuin_kit" \
+		--kit "$bash_frisk_kit" \
 		oc \
 		"$repo" \
 		"${mounts[@]}"
@@ -134,7 +142,7 @@ create_sandbox() {
 	# Marker records the commit SHA actually pinned (falling back to the
 	# human-readable ref if resolution failed), not just the tag name --
 	# comparing SHAs is what catches a moved tag or an advanced `main`.
-	sbx exec -d "$name" bash -c "printf '%s\n%s\n' ${(q)oc_sha:-${(q)oc_ref:-main}} ${(q)atuin_sha:-${(q)atuin_ref:-main}} > ${KIT_REF_MARKER}"
+	sbx exec -d "$name" bash -c "printf '%s\n%s\n%s\n' ${(q)oc_sha:-${(q)oc_ref:-main}} ${(q)atuin_sha:-${(q)atuin_ref:-main}} ${(q)bash_frisk_sha:-${(q)bash_frisk_ref:-main}} > ${KIT_REF_MARKER}"
 
 	if [[ -n $gomodcache ]]; then
 		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
@@ -143,7 +151,7 @@ create_sandbox() {
 	fi
 }
 
-# Prints "<oc_ref>\n<atuin_ref>" as recorded in the running sandbox. Empty
+# Prints "<oc_ref>\n<atuin_ref>\n<bash_frisk_ref>" as recorded in the running sandbox. Empty
 # (rather than aborting the script) if the sandbox is stopped, unreachable,
 # or predates the marker file existing.
 sandbox_kit_refs() {
@@ -166,15 +174,17 @@ else
 	current="$(sandbox_kit_refs)"
 	current_oc="${${(f)current}[1]}"
 	current_atuin="${${(f)current}[2]}"
-	if [[ -z $oc_sha && -z $atuin_sha ]]; then
+	current_bash_frisk="${${(f)current}[3]}"
+	if [[ -z $oc_sha && -z $atuin_sha && -z $bash_frisk_sha ]]; then
 		log "kit refs unresolved (offline earlier); skipping kit-freshness check"
-	elif [[ -z $current_oc && -z $current_atuin ]]; then
+	elif [[ -z $current_oc && -z $current_atuin && -z $current_bash_frisk ]]; then
 		# No marker at all: either predates the marker being introduced, or the
 		# write failed after create. Either way its kit version is unknown, not
 		# "current" -- treat it as stale so it gets a marker on next recreate.
 		reasons+=("kit version unknown (no marker found)")
 	else
 		[[ -n $current_oc && $current_oc != "${oc_sha:-${oc_ref:-main}}" ]] && reasons+=("oc kit is outdated ($current_oc -> ${oc_sha:-${oc_ref:-main}})")
+		[[ -n $current_bash_frisk && $current_bash_frisk != "${bash_frisk_sha:-${bash_frisk_ref:-main}}" ]] && reasons+=("bash-frisk kit is outdated ($current_bash_frisk -> ${bash_frisk_sha:-${bash_frisk_ref:-main}})")
 		[[ -n $current_atuin && $current_atuin != "${atuin_sha:-${atuin_ref:-main}}" ]] && reasons+=("atuin kit is outdated ($current_atuin -> ${atuin_sha:-${atuin_ref:-main}})")
 	fi
 
