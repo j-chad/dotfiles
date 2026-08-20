@@ -1,0 +1,6 @@
+trust-user-entries: false
+user-catalogue: "~/.config/bash-frisk/commands"
+record: true
+history: "~/.local/share/bash-frisk/history.jsonl"
+redact: secrets
+keep-raw-command: true
