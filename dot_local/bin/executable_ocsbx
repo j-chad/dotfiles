@@ -3,10 +3,16 @@
 set -euo pipefail
 
 readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
-readonly OC_DIR="agents/oc"
-readonly ATUIN_DIR="mixins/atuin"
-readonly BASH_FRISK_DIR="mixins/bash-frisk"
 readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
+
+# name:dir -- order defines marker file line order.
+kits=(
+	oc:agents/oc
+	atuin:mixins/atuin
+	bash-frisk:mixins/bash-frisk
+)
+kit_names=(${kits%%:*})
+kit_dirs=(${kits#*:})
 
 log() { print -ru2 -- "[ocsbx] $*"; }
 
@@ -52,10 +58,12 @@ log "checking for newer kit versions in $KIT_REPO"
 remote_refs="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 \
 	git ls-remote --tags --heads "$KIT_REPO" 2>/dev/null)" || remote_refs=""
 
+# kit_ref[name] = resolved tag/branch name, kit_pin[name] = commit sha it
+# points at (or the ref itself if resolution failed).
+typeset -A kit_ref kit_pin
+
 if [[ -z $remote_refs ]]; then
 	log "could not reach $KIT_REPO; skipping kit-freshness check and reusing whatever the sandbox already has"
-	oc_ref="" oc_sha=""
-	atuin_ref="" atuin_sha=""
 else
 	typeset -A refmap
 	while IFS=$'\t' read -r sha refname; do
@@ -101,27 +109,27 @@ else
 		(( $#tag_list )) && print -r -- "${prefix}/${tag_list[-1]}" || print -r -- "main"
 	}
 
-	log "kit-freshness check: latest refs are oc=$(latest_kit_ref "$OC_DIR"), atuin=$(latest_kit_ref "$ATUIN_DIR"), bash-frisk=$(latest_kit_ref "$BASH_FRISK_DIR")"
+	for i in {1..$#kit_names}; do
+		n="${kit_names[i]}"
+		d="${kit_dirs[i]}"
+		ref="$(latest_kit_ref "$d")"
+		kit_ref[$n]="$ref"
+		if sha="$(resolve_ref_sha "$ref")"; then
+			kit_pin[$n]="$sha"
+		else
+			log "could not resolve '$ref' to a commit; falling back to unpinned '$ref'"
+			kit_pin[$n]="$ref"
+		fi
+	done
 
-	oc_ref="$(latest_kit_ref "$OC_DIR")"
-	atuin_ref="$(latest_kit_ref "$ATUIN_DIR")"
-	bash_frisk_ref="$(latest_kit_ref "$BASH_FRISK_DIR")"
-	oc_sha="$(resolve_ref_sha "$oc_ref")" || {
-		log "could not resolve '$oc_ref' to a commit; falling back to unpinned '$oc_ref'"
-		oc_sha=""
-	}
-	atuin_sha="$(resolve_ref_sha "$atuin_ref")" || {
-		log "could not resolve '$atuin_ref' to a commit; falling back to unpinned '$atuin_ref'"
-		atuin_sha=""
-	}
-	bash_frisk_sha="$(resolve_ref_sha "$bash_frisk_ref")" || {
-		log "could not resolve '$bash_frisk_ref' to a commit; falling back to unpinned '$bash_frisk_ref'"
-		bash_frisk_sha=""
-	}
+	log "kit-freshness check: latest refs are ${(j:, :)${(kv)kit_ref}}"
 fi
-oc_kit="git+${KIT_REPO}#ref=${oc_sha:-${oc_ref:-main}}&dir=${OC_DIR}"
-atuin_kit="git+${KIT_REPO}#ref=${atuin_sha:-${atuin_ref:-main}}&dir=${ATUIN_DIR}"
-bash_frisk_kit="git+${KIT_REPO}#ref=${bash_frisk_sha:-${bash_frisk_ref:-main}}&dir=${BASH_FRISK_DIR}"
+
+kit_args=()
+for i in {1..$#kit_names}; do
+	n="${kit_names[i]}"
+	kit_args+=(--kit "git+${KIT_REPO}#ref=${kit_pin[$n]:-main}&dir=${kit_dirs[i]}")
+done
 
 mounts=()
 
@@ -130,24 +138,29 @@ gomodcache=""
 if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' -print -quit)" ]]; then
 	log "detected a go.mod in the repo; sharing the host Go module cache with the sandbox"
 	gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
-	[[ -n $gomodcache ]] && mounts+=("$gomodcache:ro")
+	if [[ -n $gomodcache ]]; then
+		mounts+=("$gomodcache:ro")
+	fi
 fi
 
 create_sandbox() {
-	log "creating sandbox '$name' for repo '$repo' (oc: ${oc_ref:-main} @ ${oc_sha:-unpinned}, atuin: ${atuin_ref:-main} @ ${atuin_sha:-unpinned}, bash-frisk: ${bash_frisk_ref:-main} @ ${bash_frisk_sha:-unpinned})"
+	log "creating sandbox '$name' for repo '$repo' (${(j:, :)${(kv)kit_pin}})"
 	sbx create --name "$name" \
 		--no-share-skills \
-		--kit "$oc_kit" \
-		--kit "$atuin_kit" \
-		--kit "$bash_frisk_kit" \
+		"${kit_args[@]}" \
 		oc \
 		"$repo" \
 		"${mounts[@]}"
 
 	# Marker records the commit SHA actually pinned (falling back to the
 	# human-readable ref if resolution failed), not just the tag name --
-	# comparing SHAs is what catches a moved tag or an advanced `main`.
-	sbx exec -d "$name" bash -c "printf '%s\n%s\n%s\n' ${(q)oc_sha:-${(q)oc_ref:-main}} ${(q)atuin_sha:-${(q)atuin_ref:-main}} ${(q)bash_frisk_sha:-${(q)bash_frisk_ref:-main}} > ${KIT_REF_MARKER}"
+	# comparing SHAs is what catches a moved tag or an advanced `main`. One
+	# line per kit, in kit_names order.
+	marker_lines=()
+	for n in $kit_names; do
+		marker_lines+=("${(q)${kit_pin[$n]:-main}}")
+	done
+	sbx exec -d "$name" bash -c "printf '%s\n' ${marker_lines[@]} > ${KIT_REF_MARKER}"
 
 	if [[ -n $gomodcache ]]; then
 		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
@@ -156,9 +169,9 @@ create_sandbox() {
 	fi
 }
 
-# Prints "<oc_ref>\n<atuin_ref>\n<bash_frisk_ref>" as recorded in the running sandbox. Empty
-# (rather than aborting the script) if the sandbox is stopped, unreachable,
-# or predates the marker file existing.
+# Prints the marker file contents, one ref per line in kit_names order, as
+# recorded in the running sandbox. Empty (rather than aborting the script)
+# if the sandbox is stopped, unreachable, or predates the marker existing.
 sandbox_kit_refs() {
 	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null || true
 }
@@ -181,26 +194,29 @@ if ! print -r -- "$sbx_ls_json" | jq -e --arg n "$name" '.sandboxes[]? | select(
 else
 	reasons=()
 
-	current="$(sandbox_kit_refs)"
-	current_oc="${${(f)current}[1]}"
-	current_atuin="${${(f)current}[2]}"
-	current_bash_frisk="${${(f)current}[3]}"
-	if [[ -z $oc_sha && -z $atuin_sha && -z $bash_frisk_sha ]]; then
+	current=(${(f)"$(sandbox_kit_refs)"})
+	if (( ! $#kit_pin )); then
 		log "kit refs unresolved (offline earlier); skipping kit-freshness check"
-	elif [[ -z $current_oc && -z $current_atuin && -z $current_bash_frisk ]]; then
-		# No marker at all: either predates the marker being introduced, or the
-		# write failed after create. Either way its kit version is unknown, not
-		# "current" -- treat it as stale so it gets a marker on next recreate.
-		reasons+=("kit version unknown (no marker found)")
+	elif (( $#current != $#kit_names )); then
+		# Marker doesn't have exactly one line per currently-installed kit:
+		# either it predates a kit being added, predates the marker
+		# existing at all, or the write failed after create. Either way the
+		# installed kit set doesn't match what we'd create today.
+		reasons+=("kit set has changed (marker lists $#current of $#kit_names kits)")
 	else
-		[[ -n $current_oc && $current_oc != "${oc_sha:-${oc_ref:-main}}" ]] && reasons+=("oc kit is outdated ($current_oc -> ${oc_sha:-${oc_ref:-main}})")
-		[[ -n $current_bash_frisk && $current_bash_frisk != "${bash_frisk_sha:-${bash_frisk_ref:-main}}" ]] && reasons+=("bash-frisk kit is outdated ($current_bash_frisk -> ${bash_frisk_sha:-${bash_frisk_ref:-main}})")
-		[[ -n $current_atuin && $current_atuin != "${atuin_sha:-${atuin_ref:-main}}" ]] && reasons+=("atuin kit is outdated ($current_atuin -> ${atuin_sha:-${atuin_ref:-main}})")
+		for i in {1..$#kit_names}; do
+			n="${kit_names[i]}"
+			have="${current[i]}"
+			want="${kit_pin[$n]:-main}"
+			[[ $have != "$want" ]] && reasons+=("$n kit is outdated ($have -> $want)")
+		done
 	fi
 
 	want="${(F)${(o)$(print -rl -- "$repo" "${mounts[@]}")}}"
 	have="${(F)${(o)$(print -r -- "$sbx_ls_json" | jq -r --arg n "$name" '.sandboxes[]? | select(.name == $n) | .workspaces[]')}}"
-	[[ $want != $have ]] && reasons+=("mounts have changed")
+	if [[ $want != $have ]]; then
+		reasons+=("mounts have changed")
+	fi
 
 	if (( $#reasons )); then
 		log "sandbox '$name' is out of date: ${(j:, :)reasons}"
