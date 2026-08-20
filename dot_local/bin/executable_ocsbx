@@ -39,6 +39,8 @@ version_sort() {
 	fi
 }
 
+log "checking for newer kit versions in $KIT_REPO"
+
 # Single unauthenticated fetch of every tag and branch head. Fetched once
 # (not once per component) and with the `insteadOf` github/gitlab -> ssh
 # rewrite in ~/.gitconfig disabled, so this never triggers an SSH key
@@ -99,6 +101,8 @@ else
 		(( $#tag_list )) && print -r -- "${prefix}/${tag_list[-1]}" || print -r -- "main"
 	}
 
+	log "kit-freshness check: latest refs are oc=$(latest_kit_ref "$OC_DIR"), atuin=$(latest_kit_ref "$ATUIN_DIR"), bash-frisk=$(latest_kit_ref "$BASH_FRISK_DIR")"
+
 	oc_ref="$(latest_kit_ref "$OC_DIR")"
 	atuin_ref="$(latest_kit_ref "$ATUIN_DIR")"
 	bash_frisk_ref="$(latest_kit_ref "$BASH_FRISK_DIR")"
@@ -124,6 +128,7 @@ mounts=()
 gomodcache=""
 # Share the host Go module cache, but only for repos that actually use Go
 if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' -print -quit)" ]]; then
+	log "detected a go.mod in the repo; sharing the host Go module cache with the sandbox"
 	gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
 	[[ -n $gomodcache ]] && mounts+=("$gomodcache:ro")
 fi
@@ -161,11 +166,16 @@ sandbox_kit_refs() {
 # Fetch `sbx ls --json` exactly once, and fail loudly on a real `sbx`
 # failure rather than misreading it as "sandbox doesn't exist" (which would
 # otherwise walk straight into recreating it).
-if ! sbx_ls_json="$(sbx ls --json 2>&1)"; then
-	log "sbx ls failed, cannot continue: $sbx_ls_json"
+log "checking for existing sandbox '$name' with sbx ls"
+sbx_ls_err="$(mktemp)"
+if ! sbx_ls_json="$(sbx ls --json 2>"$sbx_ls_err")"; then
+	log "sbx ls failed, cannot continue: $(<$sbx_ls_err)"
+	rm -f "$sbx_ls_err"
 	exit 1
 fi
+rm -f "$sbx_ls_err"
 
+log "checking if sandbox '$name' exists and is up to date"
 if ! print -r -- "$sbx_ls_json" | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
 	create_sandbox
 else
