@@ -3,7 +3,9 @@
 set -euo pipefail
 
 readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
+readonly KIT_COMMITS_API="https://gitlab.com/api/v4/projects/j-chad%2Fsbx/repository/commits"
 readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
+readonly SBX_LS_TIMEOUT=15
 
 # name:dir -- order defines marker file line order.
 kits=(
@@ -23,107 +25,26 @@ repo="${${1:-$PWD}:A}"
 # sbx names allow only letters, numbers, hyphens, periods and plus/minus
 name="oc-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
 
-# Version-sort that works with both GNU sort (`-V`) and the BSD sort shipped
-# on macOS, which has no `-V` at all. Prefers a GNU sort if one is on PATH
-# (e.g. coreutils' `gsort`), otherwise falls back to a manual numeric-field
-# sort good enough for plain `vX.Y.Z` tags.
-version_sort() {
-	if gsort --version 2>/dev/null | grep -q GNU; then
-		gsort -V
-	elif sort --version 2>/dev/null | grep -q GNU; then
-		sort -V
-	else
-		awk '{
-			orig = $0
-			s = $0
-			gsub(/^v/, "", s)
-			n = split(s, a, ".")
-			key = ""
-			for (i = 1; i <= 3; i++) key = key sprintf("%010d.", (i <= n ? a[i] + 0 : 0))
-			print key, orig
-		}' | sort | cut -d' ' -f2-
-	fi
-}
-
 log "checking for newer kit versions in $KIT_REPO"
 
-# Single unauthenticated fetch of every tag and branch head. Fetched once
-# (not once per component) and with the `insteadOf` github/gitlab -> ssh
-# rewrite in ~/.gitconfig disabled, so this never triggers an SSH key
-# prompt for what is just an anonymous read of a public repo.
-#
-# Deliberately not `--refs`: that would exclude the `^{}` peeled entries,
-# which is exactly what's needed to resolve an annotated tag to the commit
-# it points at rather than the tag object.
-remote_refs="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 \
-	git ls-remote --tags --heads "$KIT_REPO" 2>/dev/null)" || remote_refs=""
-
-# kit_ref[name] = resolved tag/branch name, kit_pin[name] = commit sha it
-# points at (or the ref itself if resolution failed).
-typeset -A kit_ref kit_pin
-
-if [[ -z $remote_refs ]]; then
-	log "could not reach $KIT_REPO; skipping kit-freshness check and reusing whatever the sandbox already has"
-else
-	typeset -A refmap
-	while IFS=$'\t' read -r sha refname; do
-		[[ -n $refname ]] && refmap[$refname]="$sha"
-	done <<< "$remote_refs"
-
-	# Resolves a tag or branch name to the commit SHA it points at. Remote
-	# refs, not local ones, are pinned -- so a moved tag or an advancing
-	# `main` is detected as staleness rather than compared as equal forever.
-	# Preferring the peeled `^{}` entry is what makes an annotated tag
-	# resolve to the commit it points to rather than the tag object itself.
-	resolve_ref_sha() {
-		local ref="$1"
-		# Build the keys in variables first: zsh's brace-matching inside a
-		# `${map[...]}` subscript gets confused by a literal `^{}` in the
-		# expression itself.
-		local peeled_key="refs/tags/${ref}^{}"
-		local tag_key="refs/tags/${ref}"
-		local head_key="refs/heads/${ref}"
-		if [[ -n ${refmap[$peeled_key]:-} ]]; then
-			print -r -- "${refmap[$peeled_key]}"
-		elif [[ -n ${refmap[$tag_key]:-} ]]; then
-			print -r -- "${refmap[$tag_key]}"
-		elif [[ -n ${refmap[$head_key]:-} ]]; then
-			print -r -- "${refmap[$head_key]}"
-		else
-			return 1
-		fi
-	}
-
-	# Latest tag for a per-component prefix (e.g. "agents/oc"). Tags are
-	# per-component ("agents/oc/vX.Y.Z"), so filter by prefix before sorting,
-	# then re-add it. No tags yet for a component -> fall back to `main`.
-	latest_kit_ref() {
-		local prefix="$1"
-		local -a tag_list
-		tag_list=(${(f)"$(print -r -- "$remote_refs" \
-			| awk -F'\t' '$2 ~ /^refs\/tags\// && $2 !~ /\^\{\}$/ {print $2}' \
-			| sed 's#^refs/tags/##' \
-			| grep "^${prefix}/" \
-			| sed "s#^${prefix}/##" \
-			| version_sort)"})
-		(( $#tag_list )) && print -r -- "${prefix}/${tag_list[-1]}" || print -r -- "main"
-	}
-
-	for i in {1..$#kit_names}; do
-		n="${kit_names[i]}"
-		d="${kit_dirs[i]}"
-		ref="$(latest_kit_ref "$d")"
-		kit_ref[$n]="$ref"
-		if sha="$(resolve_ref_sha "$ref")"; then
-			kit_pin[$n]="$sha"
-		else
-			log "could not resolve '$ref' to a commit; falling back to unpinned '$ref'"
-			kit_pin[$n]="$ref"
-		fi
-	done
-
-	log "kit-freshness check: latest refs are ${(j:, :)${(kv)kit_ref}}"
-fi
+typeset -A kit_pin
+for i in {1..$#kit_names}; do
+	n="${kit_names[i]}"
+	d="${kit_dirs[i]}"
+	if sha="$(curl -fsS --get \
+		--max-time 15 \
+		--data-urlencode "ref_name=main" \
+		--data-urlencode "path=$d" \
+		--data-urlencode "per_page=1" \
+		"$KIT_COMMITS_API" 2>/dev/null | jq -er '.[0].id')"; then
+		kit_pin[$n]="$sha"
+	else
+		kit_pin=()
+		log "could not resolve the latest commit for '$d'; skipping kit-freshness check and reusing whatever the sandbox already has"
+		break
+	fi
+done
+(( $#kit_pin )) && log "kit-freshness check: latest commits are ${(j:, :)${(kv)kit_pin}}"
 
 kit_args=()
 for i in {1..$#kit_names}; do
@@ -152,10 +73,7 @@ create_sandbox() {
 		"$repo" \
 		"${mounts[@]}"
 
-	# Marker records the commit SHA actually pinned (falling back to the
-	# human-readable ref if resolution failed), not just the tag name --
-	# comparing SHAs is what catches a moved tag or an advanced `main`. One
-	# line per kit, in kit_names order.
+	# Marker records the latest commit that touched each kit directory.
 	marker_lines=()
 	for n in $kit_names; do
 		marker_lines+=("${(q)${kit_pin[$n]:-main}}")
@@ -176,17 +94,52 @@ sandbox_kit_refs() {
 	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null || true
 }
 
-# Fetch `sbx ls --json` exactly once, and fail loudly on a real `sbx`
-# failure rather than misreading it as "sandbox doesn't exist" (which would
-# otherwise walk straight into recreating it).
+# Kill a stuck sbx client without relying on GNU timeout, which macOS lacks.
+run_sbx_ls() {
+	local output_file="$1" error_file="$2" timeout_file="$3"
+	local command_pid timer_pid exit_status=0
+
+	sbx ls --json >"$output_file" 2>"$error_file" &
+	command_pid=$!
+	(sleep "$SBX_LS_TIMEOUT"; kill -KILL "$command_pid" && print -r -- timeout >"$timeout_file") >/dev/null 2>&1 &
+	timer_pid=$!
+	wait "$command_pid" || exit_status=$?
+	kill "$timer_pid" >/dev/null 2>&1 || true
+	wait "$timer_pid" 2>/dev/null || true
+	[[ -e $timeout_file ]] && return 124
+	return "$exit_status"
+}
+
+# Fetch `sbx ls --json`, retrying only after an accepted daemon restart.
 log "checking for existing sandbox '$name' with sbx ls"
-sbx_ls_err="$(mktemp)"
-if ! sbx_ls_json="$(sbx ls --json 2>"$sbx_ls_err")"; then
-	log "sbx ls failed, cannot continue: $(<$sbx_ls_err)"
-	rm -f "$sbx_ls_err"
+sbx_ls_tmp="$(mktemp -d)"
+sbx_ls_status=0
+run_sbx_ls "$sbx_ls_tmp/output" "$sbx_ls_tmp/error" "$sbx_ls_tmp/timeout" || sbx_ls_status=$?
+
+if (( sbx_ls_status == 124 )); then
+	log "sbx ls timed out after ${SBX_LS_TIMEOUT}s"
+	if [[ -t 0 ]] && read -q "?[ocsbx] Restart the sbx daemon and retry? (y/N) "; then
+		print
+		sbx daemon restart
+		rm -f "$sbx_ls_tmp/timeout"
+		sbx_ls_status=0
+		run_sbx_ls "$sbx_ls_tmp/output" "$sbx_ls_tmp/error" "$sbx_ls_tmp/timeout" || sbx_ls_status=$?
+	else
+		[[ -t 0 ]] && print
+	fi
+fi
+
+if (( sbx_ls_status != 0 )); then
+	if (( sbx_ls_status == 124 )); then
+		log "sbx ls timed out, cannot continue"
+	else
+		log "sbx ls failed, cannot continue: $(<"$sbx_ls_tmp/error")"
+	fi
+	rm -rf "$sbx_ls_tmp"
 	exit 1
 fi
-rm -f "$sbx_ls_err"
+sbx_ls_json="$(<"$sbx_ls_tmp/output")"
+rm -rf "$sbx_ls_tmp"
 
 log "checking if sandbox '$name' exists and is up to date"
 if ! print -r -- "$sbx_ls_json" | jq -e --arg n "$name" '.sandboxes[]? | select(.name == $n)' >/dev/null; then
@@ -196,7 +149,7 @@ else
 
 	current=(${(f)"$(sandbox_kit_refs)"})
 	if (( ! $#kit_pin )); then
-		log "kit refs unresolved (offline earlier); skipping kit-freshness check"
+		log "kit commits unresolved (offline earlier); skipping kit-freshness check"
 	elif (( $#current != $#kit_names )); then
 		# Marker doesn't have exactly one line per currently-installed kit:
 		# either it predates a kit being added, predates the marker
