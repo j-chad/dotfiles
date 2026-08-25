@@ -1,29 +1,37 @@
 #!/usr/bin/env zsh
-# ocsbx - create or run a sandbox for an OpenCode repository
+# aisbx - create or run a sandbox for a coding-agent repository
 set -euo pipefail
 
 readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
 readonly KIT_COMMITS_API="https://gitlab.com/api/v4/projects/j-chad%2Fsbx/repository/commits"
-readonly KIT_REF_MARKER="/home/agent/.ocsbx-kit-ref"
+readonly KIT_REF_MARKER="/home/agent/.aisbx-kit-ref"
 readonly SBX_LS_TIMEOUT=15
 
-# name:dir -- order defines marker file line order.
+# First arg selects the agent kit if it names one, else defaults to "oc"
+# and is treated as the repo path.
+agent="oc"
+case "${1:-}" in
+	oc|crush) agent="$1"; shift ;;
+esac
+
+# name:dir -- order defines marker file line order. Agent kit first, then
+# shared mixins.
 kits=(
-	oc:agents/oc
+	"${agent}:agents/${agent}"
 	atuin:mixins/atuin
 	bash-frisk:mixins/bash-frisk
 )
 kit_names=(${kits%%:*})
 kit_dirs=(${kits#*:})
 
-log() { print -ru2 -- "[ocsbx] $*"; }
+log() { print -ru2 -- "[aisbx] $*"; }
 
 trap 'log "aborted: command failed at line $LINENO"' ERR
 
-# Resolve to an absolute path so `ocsbx .` doesn't produce the name "oc-."
+# Resolve to an absolute path so `aisbx .` doesn't produce the name "oc-."
 repo="${${1:-$PWD}:A}"
 # sbx names allow only letters, numbers, hyphens, periods and plus/minus
-name="oc-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
+name="${agent}-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
 
 log "checking for newer kit versions in $KIT_REPO"
 
@@ -60,7 +68,7 @@ if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' 
 	log "detected a go.mod in the repo; sharing the host Go module cache with the sandbox"
 	gomodcache="$(go env GOMODCACHE 2>/dev/null || true)"
 	if [[ -n $gomodcache ]]; then
-		mounts+=("$gomodcache:ro")
+		mounts+=("${gomodcache}:ro")
 	fi
 fi
 
@@ -69,7 +77,7 @@ create_sandbox() {
 	sbx create --name "$name" \
 		--no-share-skills \
 		"${kit_args[@]}" \
-		oc \
+		"$agent" \
 		"$repo" \
 		"${mounts[@]}"
 
@@ -118,7 +126,7 @@ run_sbx_ls "$sbx_ls_tmp/output" "$sbx_ls_tmp/error" "$sbx_ls_tmp/timeout" || sbx
 
 if (( sbx_ls_status == 124 )); then
 	log "sbx ls timed out after ${SBX_LS_TIMEOUT}s"
-	if [[ -t 0 ]] && read -q "?[ocsbx] Restart the sbx daemon and retry? (y/N) "; then
+	if [[ -t 0 ]] && read -q "?[aisbx] Restart the sbx daemon and retry? (y/N) "; then
 		print
 		sbx daemon restart
 		rm -f "$sbx_ls_tmp/timeout"
@@ -173,7 +181,7 @@ else
 
 	if (( $#reasons )); then
 		log "sandbox '$name' is out of date: ${(j:, :)reasons}"
-		if [[ -t 0 ]] && read -q "?[ocsbx] Recreate it? Container-local state will be lost (y/N) "; then
+		if [[ -t 0 ]] && read -q "?[aisbx] Recreate it? Container-local state will be lost (y/N) "; then
 			print
 			sbx rm --force "$name"
 			create_sandbox
