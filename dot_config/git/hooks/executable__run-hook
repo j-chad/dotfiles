@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # Runs the repository hook, then ordered global actions.
 # Set GIT_HOOKS_DEBUG=1 to print per-action timing to stderr.
+#
+# Actions named "*.parallel" run concurrently with their contiguous
+# neighbours of the same kind. Each action's stdout/stderr is buffered and
+# replayed in filename order once the whole group finishes, so overlapping
+# output is never interleaved. Everything else runs sequentially and
+# fails fast, as before.
 set -eu
 
 hook_name=$1
 shift
+hook_args=("$@")
 hook_dir=$(dirname "$0")
 
 # Resolve once and export so actions that also call `git rev-parse --git-dir`
@@ -24,11 +31,63 @@ run() {
 	fi
 }
 
+run_parallel() {
+	local -a names=("$@") pids=() outs=()
+	local name tmp status=0 i
+
+	for name in "${names[@]}"; do
+		tmp=$(mktemp)
+		outs+=("$tmp")
+		(
+			if [ -n "${GIT_HOOKS_DEBUG:-}" ]; then
+				echo "[git-hooks] $hook_name/$(basename "$name") (parallel)"
+				time "$name" "${hook_args[@]}"
+			else
+				"$name" "${hook_args[@]}"
+			fi
+		) >"$tmp" 2>&1 &
+		pids+=("$!")
+	done
+
+	for i in "${!pids[@]}"; do
+		wait "${pids[$i]}" || status=1
+	done
+
+	for tmp in "${outs[@]}"; do
+		cat "$tmp" >&2
+		rm -f "$tmp"
+	done
+
+	return "$status"
+}
+
 if [ -x "$repo_hook" ]; then
-	run "$repo_hook" "$@"
+	run "$repo_hook" "${hook_args[@]}"
 fi
 
-for action in "$hook_dir/$hook_name.d"/*; do
-	[ -x "$action" ] || continue
-	run "$action" "$@"
+actions=("$hook_dir/$hook_name.d"/*)
+i=0
+n=${#actions[@]}
+while [ "$i" -lt "$n" ]; do
+	action=${actions[$i]}
+	case "$action" in
+	*.parallel)
+		group=()
+		while [ "$i" -lt "$n" ]; do
+			action=${actions[$i]}
+			case "$action" in
+			*.parallel)
+				[ -x "$action" ] && group+=("$action")
+				i=$((i + 1))
+				;;
+			*) break ;;
+			esac
+		done
+		[ "${#group[@]}" -gt 0 ] && run_parallel "${group[@]}"
+		;;
+	*)
+		[ -x "$action" ] && run "$action" "${hook_args[@]}"
+		i=$((i + 1))
+		;;
+	esac
 done
