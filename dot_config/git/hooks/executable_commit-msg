@@ -28,6 +28,14 @@ cleaned="$(
 cleaned="$(printf '%s\n' "$cleaned" \
   | awk 'NF{f=1; last=NR} f{buf[NR]=$0} END{for(i=1;i<=last;i++) print buf[i]}')"
 
+# Cache whatever the user just typed (before any validation) so a later
+# rejection doesn't lose it. Replaced every time; evicted on success by
+# the post-commit hook. Only meaningful for interactive commits, but
+# cheap enough to always write.
+if [ -n "$cleaned" ]; then
+  printf '%s\n' "$cleaned" > "$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE"
+fi
+
 if [ -z "$cleaned" ]; then
   echo "commit-msg: aborting — empty commit message" >&2
   exit 1

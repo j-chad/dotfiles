@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Delegate to a repo-local hook ONLY if it's a different file than this one
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+repo_hook="$(git rev-parse --git-path hooks)/$(basename "$0")"
+repo_hook="$(cd "$(dirname "$repo_hook")" 2>/dev/null && pwd)/$(basename "$repo_hook")"
+if [ -x "$repo_hook" ] && [ "$repo_hook" != "$self" ]; then
+  "$repo_hook" "$@"
+fi
+
+# A commit only reaches post-commit once it has fully succeeded, so evict
+# the recovery cache left by commit-msg.
+rm -f "$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE"
