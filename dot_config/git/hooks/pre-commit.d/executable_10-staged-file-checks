@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Rejects oversized staged blobs.
+# Rejects oversized staged blobs and UTF-8 BOMs (one file-list traversal).
 set -euo pipefail
 
 max_bytes=$(git config --type=int hooks.maxfilesize 2>/dev/null || echo $((5 * 1024 * 1024)))
 large=""
+bom=""
 while IFS= read -r -d '' f; do
 	size=$(git cat-file -s ":$f" 2>/dev/null) || continue
 	[ "$size" -gt "$max_bytes" ] && large="${large}  ${f} (${size} bytes)"$'\n'
+
+	if [ "$(git cat-file blob ":$f" 2>/dev/null | head -c3)" = $'\xef\xbb\xbf' ]; then
+		bom="${bom}  ${f}"$'\n'
+	fi
 done < <(git diff --cached -z --name-only --diff-filter=AM)
 
 if [ -n "$large" ]; then
 	printf 'Error: staged files exceed %s bytes:\n%s' "$max_bytes" "$large" >&2
 	echo "Raise it with 'git config hooks.maxfilesize <bytes>', or bypass with --no-verify." >&2
+	exit 1
+fi
+
+if [ -n "$bom" ]; then
+	printf 'Error: UTF-8 BOM found in:\n%s' "$bom" >&2
 	exit 1
 fi

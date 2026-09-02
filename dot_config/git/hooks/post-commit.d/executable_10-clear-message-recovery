@@ -3,4 +3,4 @@
 # Failed commits never reach this hook, preserving the message for recovery.
 set -eu
 
-rm -f "$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE"
+rm -f "$GIT_DIR/PREPARE_COMMIT_MSG_CACHE"

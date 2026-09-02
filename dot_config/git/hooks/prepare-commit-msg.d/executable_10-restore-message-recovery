@@ -11,7 +11,7 @@ case "$commit_source" in
 	*) exit 0 ;;
 esac
 
-cache_file=$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE
+cache_file=$GIT_DIR/PREPARE_COMMIT_MSG_CACHE
 [ -s "$cache_file" ] || exit 0
 
 title=$(sed -n '1p' "$cache_file")

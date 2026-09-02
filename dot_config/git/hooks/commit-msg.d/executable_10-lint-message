@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validates commit-message title and body rules.
+# Saves the cleaned message for recovery, then validates title/body rules.
 set -euo pipefail
 
 msg_file="$1"
@@ -17,6 +17,12 @@ cleaned="$(
 )"
 cleaned="$(printf '%s\n' "$cleaned" \
 	| awk 'NF{f=1; last=NR} f{buf[NR]=$0} END{for(i=1;i<=last;i++) print buf[i]}')"
+
+# Save before validating so a rejection doesn't lose it. Replaced every
+# time; evicted on success by post-commit.
+if [ -n "$cleaned" ]; then
+	printf '%s\n' "$cleaned" > "$GIT_DIR/PREPARE_COMMIT_MSG_CACHE"
+fi
 
 if [ -z "$cleaned" ]; then
 	echo "commit-msg: aborting — empty commit message" >&2

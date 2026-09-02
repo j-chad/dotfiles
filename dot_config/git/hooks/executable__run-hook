@@ -1,17 +1,34 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Runs the repository hook, then ordered global actions.
+# Set GIT_HOOKS_DEBUG=1 to print per-action timing to stderr.
 set -eu
 
 hook_name=$1
 shift
 hook_dir=$(dirname "$0")
-repo_hook=$(git rev-parse --git-dir)/hooks/$hook_name
+
+# Resolve once and export so actions that also call `git rev-parse --git-dir`
+# don't each spawn their own git discovery process.
+GIT_DIR=$(git rev-parse --git-dir)
+export GIT_DIR
+repo_hook="$GIT_DIR/hooks/$hook_name"
+
+run() {
+	name=$1
+	shift
+	if [ -n "${GIT_HOOKS_DEBUG:-}" ]; then
+		echo "[git-hooks] $hook_name/$(basename "$name")" >&2
+		time "$name" "$@"
+	else
+		"$name" "$@"
+	fi
+}
 
 if [ -x "$repo_hook" ]; then
-	"$repo_hook" "$@"
+	run "$repo_hook" "$@"
 fi
 
 for action in "$hook_dir/$hook_name.d"/*; do
 	[ -x "$action" ] || continue
-	"$action" "$@"
+	run "$action" "$@"
 done
