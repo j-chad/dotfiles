@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Validates commit-message title and body rules.
+set -euo pipefail
+
+msg_file="$1"
+
+# Comment char is configurable; 'auto' resolves to a real char we cannot
+# predict here, so fall back to '#'.
+comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
+if [ "$comment_char" = auto ]; then comment_char='#'; fi
+
+# Mirror git's default --cleanup=strip.
+cleaned="$(
+	sed "\|^${comment_char}.*>8|,\$d" "$msg_file" \
+		| grep -v "^${comment_char}" \
+		|| true
+)"
+cleaned="$(printf '%s\n' "$cleaned" \
+	| awk 'NF{f=1; last=NR} f{buf[NR]=$0} END{for(i=1;i<=last;i++) print buf[i]}')"
+
+if [ -z "$cleaned" ]; then
+	echo "commit-msg: aborting — empty commit message" >&2
+	exit 1
+fi
+
+L=()
+while IFS= read -r _line || [ -n "$_line" ]; do L+=("$_line"); done <<< "$cleaned"
+title="${L[0]:-}"
+body=("${L[@]:1}")
+
+case "$title" in
+	"Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
+
+violations=()
+v() { violations+=("$1"); }
+
+title_max=72
+title_min=5
+
+[ "${#title}" -gt "$title_max" ] && v "1: T1 title-max-length: ${#title} chars (max ${title_max})"
+[ "${#title}" -lt "$title_min" ] && v "1: T8 title-min-length: ${#title} chars (min ${title_min})"
+case "$title" in *[" "$'\t']) v "1: T2 title-trailing-whitespace" ;; esac
+case "$title" in *['?:!.,;']) v "1: T3 title-trailing-punctuation" ;; esac
+case "$title" in *$'\t'*) v "1: T4 title-hard-tab" ;; esac
+
+body_max_line_length=80
+body_min=20
+require_body=false
+
+if [ "${#body[@]}" -gt 0 ] && [ -n "${body[0]}" ]; then
+	v "2: B4 body-first-line-empty: second line must be blank"
+fi
+
+body_text=""
+if [ "${#body[@]}" -gt 0 ]; then
+	lineno=1
+	for line in "${body[@]}"; do
+		lineno=$((lineno + 1))
+		[ "${#line}" -gt "$body_max_line_length" ] && v "${lineno}: B1 body-max-line-length: ${#line} chars (max ${body_max_line_length})"
+		case "$line" in *[" "$'\t']) v "${lineno}: B2 body-trailing-whitespace" ;; esac
+		case "$line" in *$'\t'*) v "${lineno}: B3 body-hard-tab" ;; esac
+		body_text="${body_text}${line}"
+	done
+fi
+
+body_stripped="$(printf '%s' "$body_text" | tr -d ' \t')"
+
+if [ -z "$body_stripped" ]; then
+	if [ "$require_body" = true ]; then
+		v "3: B6 body-is-missing: a commit body is required"
+	fi
+else
+	[ "${#body_stripped}" -lt "$body_min" ] && v "3: B5 body-min-length: ${#body_stripped} chars (min ${body_min})"
+fi
+
+if [ "${#violations[@]}" -gt 0 ]; then
+	echo "commit-msg: ${#violations[@]} violation(s):" >&2
+	printf '  %s\n' "${violations[@]}" >&2
+	echo "Run git commit -e -F .git/COMMIT_EDITMSG to retry"
+	exit 1
+fi

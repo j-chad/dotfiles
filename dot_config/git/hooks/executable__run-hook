@@ -1,0 +1,17 @@
+#!/bin/sh
+# Runs the repository hook, then ordered global actions.
+set -eu
+
+hook_name=$1
+shift
+hook_dir=$(dirname "$0")
+repo_hook=$(git rev-parse --git-dir)/hooks/$hook_name
+
+if [ -x "$repo_hook" ]; then
+	"$repo_hook" "$@"
+fi
+
+for action in "$hook_dir/$hook_name.d"/*; do
+	[ -x "$action" ] || continue
+	"$action" "$@"
+done

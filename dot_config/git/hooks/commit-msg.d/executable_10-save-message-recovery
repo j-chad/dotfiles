@@ -1,0 +1,19 @@
+#!/bin/sh
+# Saves the cleaned message before linting so rejected text is not lost.
+# The cache is restored on the next interactive attempt and cleared on success.
+set -eu
+
+msg_file=$1
+comment_char=$(git config core.commentChar 2>/dev/null || echo '#')
+[ "$comment_char" = auto ] && comment_char='#'
+
+cleaned=$(
+	sed "\|^${comment_char}.*>8|,\$d" "$msg_file" |
+		grep -v "^${comment_char}" || true
+)
+cleaned=$(printf '%s\n' "$cleaned" |
+	awk 'NF{f=1; last=NR} f{buf[NR]=$0} END{for(i=1;i<=last;i++) print buf[i]}')
+
+if [ -n "$cleaned" ]; then
+	printf '%s\n' "$cleaned" > "$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE"
+fi

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Clears the rejected-message cache after a successful commit.
+# Failed commits never reach this hook, preserving the message for recovery.
+set -eu
+
+rm -f "$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE"

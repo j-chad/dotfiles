@@ -1,0 +1,32 @@
+#!/bin/sh
+# Adds the cached rejected message as comments for plain interactive commits.
+# Message, amend, merge, and squash commits are left unchanged.
+set -eu
+
+msg_file=$1
+commit_source=${2:-}
+
+case "$commit_source" in
+	""|template) ;;
+	*) exit 0 ;;
+esac
+
+cache_file=$(git rev-parse --git-dir)/PREPARE_COMMIT_MSG_CACHE
+[ -s "$cache_file" ] || exit 0
+
+title=$(sed -n '1p' "$cache_file")
+body=$(sed '1d' "$cache_file" | sed '/^[[:space:]]*$/d')
+[ -n "$title" ] || exit 0
+
+tmp_file=$(mktemp)
+{
+	echo ""
+	echo "# Previous attempt: $title"
+	if [ -n "$body" ]; then
+		echo "#"
+		printf '%s\n' "$body" | sed 's/^/# /'
+	fi
+	echo "#"
+	sed -e '/./,$!d' "$msg_file"
+} > "$tmp_file"
+mv "$tmp_file" "$msg_file"

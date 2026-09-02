@@ -1,0 +1,5 @@
+#!/bin/sh
+# Rejects staged whitespace errors and conflict markers.
+set -eu
+
+git diff --cached --check
