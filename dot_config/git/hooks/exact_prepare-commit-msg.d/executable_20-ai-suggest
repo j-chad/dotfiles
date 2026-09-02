@@ -1,8 +1,9 @@
 #!/bin/sh
 # Suggests a commit message from the staged diff using a local LM Studio
-# server. Only runs for `git ai-commit` (GIT_COMMIT_AI=1). Best-effort:
-# any failure (server down, cold model, malformed output) falls through
-# to a normal, empty commit message.
+# server, and adds it as comments (never as editable text) for review.
+# Only runs for `git ai-commit` (GIT_COMMIT_AI=1). Best-effort: any failure
+# (server down, cold model, malformed output) falls through to a normal
+# commit with no suggestion.
 set -eu
 
 [ "${GIT_COMMIT_AI:-}" = 1 ] || exit 0
@@ -17,8 +18,35 @@ case "$commit_source" in
 	*) exit 0 ;;
 esac
 
-diff=$(git diff --cached | cut -c1-8000)
+diff=$(git diff --cached)
 [ -n "$diff" ] || exit 0
+
+# Cap the total diff size (bytes, not per-line) so large changes don't blow
+# the model's context window.
+diff=$(printf '%s' "$diff" | head -c 8000)
+
+repo=$(basename "$(git rev-parse --show-toplevel)")
+branch=$(git symbolic-ref --short -q HEAD || echo "detached HEAD")
+stat=$(git diff --cached --stat | tail -1)
+files=$(git diff --cached --name-status)
+recent_titles=$(git log -10 --format='- %s' 2>/dev/null || true)
+
+context=$(cat <<EOF
+Repository: $repo
+Branch: $branch
+
+Recent commit titles (for style reference):
+$recent_titles
+
+Staged changes:
+$files
+
+Summary: $stat
+
+Staged diff:
+$diff
+EOF
+)
 
 base_url=$(git config ai.commitUrl || echo "http://localhost:1234/v1")
 model=$(git config ai.commitModel || echo "")
@@ -34,12 +62,12 @@ schema='{
 	"additionalProperties": false
 }'
 
-payload=$(jq -n --arg model "$model" --arg diff "$diff" --argjson schema "$schema" '
+payload=$(jq -n --arg model "$model" --arg context "$context" --argjson schema "$schema" '
 	{
 		temperature: 0.2,
 		messages: [
-			{role: "system", content: "You write git commit messages from diffs. Title: imperative mood, no trailing period. Body: explain what changed and why, wrapped under 80 characters per line. Omit the body if the change is trivial."},
-			{role: "user", content: ("Diff:\n" + $diff)}
+			{role: "system", content: "You write git commit messages from a diff and repository context. Title: imperative mood, no trailing period, specific about what changed. Body: explain what changed and why, wrapped under 80 characters per line. Match the style of the recent commit titles when possible. Omit the body if the change is trivial."},
+			{role: "user", content: $context}
 		],
 		response_format: {type: "json_schema", json_schema: {name: "commit_message", schema: $schema}}
 	} + (if $model != "" then {model: $model} else {} end)
@@ -91,10 +119,25 @@ if ! printf '%s' "$content" \
 	exit 0
 fi
 
-{
-	printf '%s' "$content" | jq -r '.title'
-	printf '%s' "$content" | jq -r 'if (.body | length) > 0 then "\n" + (.body | join("\n")) else "" end'
-} > "$tmp_msg"
+# Comment char is configurable; 'auto' resolves to a real char we cannot
+# predict here, so fall back to '#'.
+comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
+if [ "$comment_char" = auto ]; then comment_char='#'; fi
 
-cat "$tmp_msg" "$msg_file" > "$tmp_msg.combined" && mv "$tmp_msg.combined" "$msg_file"
+title=$(printf '%s' "$content" | jq -r '.title')
+body=$(printf '%s' "$content" | jq -r '.body[]?')
+
+{
+	echo ""
+	echo "${comment_char} AI suggestion: $title"
+	if [ -n "$body" ]; then
+		echo "${comment_char}"
+		printf '%s\n' "$body" | sed "s/^/${comment_char} /"
+	fi
+	echo "${comment_char}"
+	echo "${comment_char} Remove the comment prefixes above to use this message."
+	cat "$msg_file"
+} > "$tmp_msg"
+mv "$tmp_msg" "$msg_file"
+
 echo "ai-commit: commit message generated in ${elapsed}s" >&2
