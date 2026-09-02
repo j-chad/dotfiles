@@ -1,3 +1,3 @@
 #!/bin/sh
 # Dispatches post-commit actions.
-exec "$(dirname "$0")/_run-hook" "$(basename "$0")" "$@"
+exec "${0%/*}/_run-hook" "${0##*/}" "$@"

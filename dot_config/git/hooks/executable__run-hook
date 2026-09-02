@@ -12,7 +12,7 @@ set -eu
 hook_name=$1
 shift
 hook_args=("$@")
-hook_dir=$(dirname "$0")
+hook_dir=${0%/*}
 
 # Resolve once and export so actions that also call `git rev-parse --git-dir`
 # don't each spawn their own git discovery process.
@@ -24,7 +24,7 @@ run() {
 	name=$1
 	shift
 	if [ -n "${GIT_HOOKS_DEBUG:-}" ]; then
-		echo "[git-hooks] $hook_name/$(basename "$name")" >&2
+		echo "[git-hooks] $hook_name/${name##*/}" >&2
 		time "$name" "$@"
 	else
 		"$name" "$@"
@@ -41,7 +41,7 @@ run_parallel() {
 		outs+=("$tmp")
 		(
 			if [ -n "${GIT_HOOKS_DEBUG:-}" ]; then
-				echo "[git-hooks] $hook_name/$(basename "$name") (parallel)"
+				echo "[git-hooks] $hook_name/${name##*/} (parallel)"
 				time "$name" "${hook_args[@]}"
 			else
 				"$name" "${hook_args[@]}"
