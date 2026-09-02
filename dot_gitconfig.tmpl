@@ -106,6 +106,9 @@
     # Pick a Jira ticket assigned to me and start a branch for it.
     ticket = "!bash ~/.config/git/bin/ticket.sh"
 
+    # Commit with an AI-generated (LM Studio) message suggestion.
+    ai-commit = "!f() { GIT_COMMIT_AI=1 git commit \"$@\"; }; f"
+
     # Edit this repo's local excludes (.git/info/exclude - not committed, not shared).
     exclude = "!f() { p=\"$(git rev-parse --git-path info/exclude)\"; mkdir -p \"${p%/*}\"; \"$(git var GIT_EDITOR)\" \"$p\"; }; f"
 

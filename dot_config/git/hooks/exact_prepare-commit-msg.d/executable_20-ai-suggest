@@ -1,0 +1,100 @@
+#!/bin/sh
+# Suggests a commit message from the staged diff using a local LM Studio
+# server. Only runs for `git ai-commit` (GIT_COMMIT_AI=1). Best-effort:
+# any failure (server down, cold model, malformed output) falls through
+# to a normal, empty commit message.
+set -eu
+
+[ "${GIT_COMMIT_AI:-}" = 1 ] || exit 0
+command -v jq >/dev/null 2>&1 || { echo "ai-commit: jq not found; skipping suggestion" >&2; exit 0; }
+command -v curl >/dev/null 2>&1 || { echo "ai-commit: curl not found; skipping suggestion" >&2; exit 0; }
+
+msg_file=$1
+commit_source=${2:-}
+
+case "$commit_source" in
+	""|template) ;;
+	*) exit 0 ;;
+esac
+
+diff=$(git diff --cached | cut -c1-8000)
+[ -n "$diff" ] || exit 0
+
+base_url=$(git config ai.commitUrl || echo "http://localhost:1234/v1")
+model=$(git config ai.commitModel || echo "")
+timeout=$(git config ai.commitTimeout || echo 20)
+
+schema='{
+	"type": "object",
+	"properties": {
+		"title": {"type": "string", "minLength": 5, "maxLength": 72},
+		"body": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 10}
+	},
+	"required": ["title", "body"],
+	"additionalProperties": false
+}'
+
+payload=$(jq -n --arg model "$model" --arg diff "$diff" --argjson schema "$schema" '
+	{
+		temperature: 0.2,
+		messages: [
+			{role: "system", content: "You write git commit messages from diffs. Title: imperative mood, no trailing period. Body: explain what changed and why, wrapped under 80 characters per line. Omit the body if the change is trivial."},
+			{role: "user", content: ("Diff:\n" + $diff)}
+		],
+		response_format: {type: "json_schema", json_schema: {name: "commit_message", schema: $schema}}
+	} + (if $model != "" then {model: $model} else {} end)
+')
+
+tmp_out=$(mktemp)
+tmp_msg=$(mktemp)
+cleanup() { rm -f "$tmp_out" "$tmp_msg"; }
+trap cleanup EXIT INT TERM
+
+start=$(date +%s)
+curl -s --max-time "$timeout" \
+	-H 'Content-Type: application/json' \
+	-d "$payload" \
+	"$base_url/chat/completions" > "$tmp_out" 2>/dev/null &
+curl_pid=$!
+
+if [ -t 2 ]; then
+	spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+	i=0
+	while kill -0 "$curl_pid" 2>/dev/null; do
+		elapsed=$(($(date +%s) - start))
+		i=$(((i + 1) % 10))
+		frame=$(printf '%s' "$spin" | cut -c$((i + 1)))
+		printf '\r%s Generating commit message (LM Studio)… %ss' "$frame" "$elapsed" >&2
+		sleep 0.2
+	done
+	printf '\r\033[K' >&2
+else
+	echo "ai-commit: generating commit message via LM Studio…" >&2
+fi
+
+if ! wait "$curl_pid"; then
+	elapsed=$(($(date +%s) - start))
+	echo "ai-commit: LM Studio unavailable after ${elapsed}s; continuing without suggestion" >&2
+	exit 0
+fi
+elapsed=$(($(date +%s) - start))
+
+content=$(jq -r '.choices[0].message.content // empty' "$tmp_out" 2>/dev/null || true)
+if [ -z "$content" ]; then
+	echo "ai-commit: no response from LM Studio after ${elapsed}s; continuing without suggestion" >&2
+	exit 0
+fi
+
+if ! printf '%s' "$content" \
+	| jq -e '(.title | type == "string" and length >= 5 and length <= 72) and (.body | type == "array")' >/dev/null 2>&1; then
+	echo "ai-commit: malformed response after ${elapsed}s; continuing without suggestion" >&2
+	exit 0
+fi
+
+{
+	printf '%s' "$content" | jq -r '.title'
+	printf '%s' "$content" | jq -r 'if (.body | length) > 0 then "\n" + (.body | join("\n")) else "" end'
+} > "$tmp_msg"
+
+cat "$tmp_msg" "$msg_file" > "$tmp_msg.combined" && mv "$tmp_msg.combined" "$msg_file"
+echo "ai-commit: commit message generated in ${elapsed}s" >&2
