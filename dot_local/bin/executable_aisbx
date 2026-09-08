@@ -62,14 +62,6 @@ done
 
 mounts=()
 
-opencode_db=""
-if [[ $agent == oc ]]; then
-	opencode_data="$HOME/.local/share/opencode"
-	mkdir -p "$opencode_data"
-	opencode_db="$opencode_data/opencode.db"
-	mounts+=("$opencode_data")
-fi
-
 gomodcache=""
 # Share the host Go module cache, but only for repos that actually use Go
 if [[ -n "$(find "$repo" -maxdepth 3 -name go.mod -not -path '*/node_modules/*' -print -quit)" ]]; then
@@ -83,7 +75,6 @@ fi
 create_sandbox() {
 	log "creating sandbox '$name' for repo '$repo' (${(j:, :)${(kv)kit_pin}})"
 	env_args=()
-	[[ -n $opencode_db ]] && env_args+=(--env "OPENCODE_DB=$opencode_db")
 	sbx create --name "$name" \
 		--no-share-skills \
 		"${kit_args[@]}" \
@@ -204,5 +195,4 @@ else
 fi
 
 run_env_args=()
-[[ -n $opencode_db ]] && run_env_args+=(--env "OPENCODE_DB=$opencode_db")
 sbx run --name "$name" "${run_env_args[@]}"

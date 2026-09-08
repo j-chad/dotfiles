@@ -1,7 +1,6 @@
 style = "auto"
 dialect = "uk"
 workspaces = true
-filter_mode = "workspace"
 
 [ai]
 enabled = false
