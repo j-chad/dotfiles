@@ -1,0 +1,2 @@
+keybind = global:cmd+backquote=toggle_quick_terminal
+adjust-cursor-thickness=3
