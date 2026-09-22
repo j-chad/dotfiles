@@ -1,2 +1,3 @@
 keybind = global:cmd+backquote=toggle_quick_terminal
 adjust-cursor-thickness=3
+window-padding-x = 15
