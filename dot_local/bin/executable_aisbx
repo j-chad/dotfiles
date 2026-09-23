@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # aisbx - create or run a sandbox for a coding-agent repository
 set -euo pipefail
+setopt extendedglob
 
 readonly KIT_REPO="https://gitlab.com/j-chad/sbx.git"
 readonly KIT_COMMITS_API="https://gitlab.com/api/v4/projects/j-chad%2Fsbx/repository/commits"
@@ -30,8 +31,11 @@ trap 'log "aborted: command failed at line $LINENO"' ERR
 
 # Resolve to an absolute path so `aisbx .` doesn't produce the name "oc-."
 repo="${${1:-$PWD}:A}"
-# sbx names allow only letters, numbers, hyphens, periods and plus/minus
-name="${agent}-${${repo:t}//[^a-zA-Z0-9.+-]/-}"
+# sbx names allow only letters, numbers, hyphens and periods; must start
+# alphanumeric, be 2-63 chars, and not end in "-" or ".".
+name="${agent}-${${repo:t}//[^a-zA-Z0-9.-]/-}"
+name="${name[1,63]}"
+name="${name%%[-.]##}"
 
 log "checking for newer kit versions in $KIT_REPO"
 
@@ -76,7 +80,7 @@ create_sandbox() {
 	log "creating sandbox '$name' for repo '$repo' (${(j:, :)${(kv)kit_pin}})"
 	env_args=()
 	sbx create --name "$name" \
-		--no-share-skills \
+		--skills=off \
 		"${kit_args[@]}" \
 		"${env_args[@]}" \
 		"$agent" \
@@ -88,11 +92,11 @@ create_sandbox() {
 	for n in $kit_names; do
 		marker_lines+=("${(q)${kit_pin[$n]:-main}}")
 	done
-	sbx exec -d "$name" bash -c "printf '%s\n' ${marker_lines[@]} > ${KIT_REF_MARKER}"
+	sbx exec "$name" bash -c "printf '%s\n' ${marker_lines[@]} > ${KIT_REF_MARKER}"
 
 	if [[ -n $gomodcache ]]; then
 		log "configuring GOPROXY to use the local Go module cache at '$gomodcache'"
-		sbx exec -d "$name" bash -c \
+		sbx exec "$name" bash -c \
 			"echo 'export GOPROXY=file://${gomodcache}/cache/download,https://proxy.golang.org,direct' >> /etc/sandbox-persistent.sh"
 	fi
 }
@@ -101,7 +105,7 @@ create_sandbox() {
 # recorded in the running sandbox. Empty (rather than aborting the script)
 # if the sandbox is stopped, unreachable, or predates the marker existing.
 sandbox_kit_refs() {
-	sbx exec -d "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null || true
+	sbx exec "$name" bash -c "cat $KIT_REF_MARKER 2>/dev/null" 2>/dev/null || true
 }
 
 # Kill a stuck sbx client without relying on GNU timeout, which macOS lacks.
