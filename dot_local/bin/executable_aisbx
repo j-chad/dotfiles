@@ -30,7 +30,12 @@ log() { print -ru2 -- "[aisbx] $*"; }
 trap 'log "aborted: command failed at line $LINENO"' ERR
 
 # Resolve to an absolute path so `aisbx .` doesn't produce the name "oc-."
-repo="${${1:-$PWD}:A}"
+if (( $# )) && [[ $1 != -* ]]; then
+	repo="${1:A}"
+	shift
+else
+	repo="$PWD"
+fi
 # sbx names allow only letters, numbers, hyphens and periods; must start
 # alphanumeric, be 2-63 chars, and not end in "-" or ".".
 name="${agent}-${${repo:t}//[^a-zA-Z0-9.-]/-}"
@@ -199,4 +204,4 @@ else
 fi
 
 run_env_args=()
-sbx run --name "$name" "${run_env_args[@]}"
+sbx run --name "$name" "${run_env_args[@]}" "$@"
