@@ -30,12 +30,11 @@ log() { print -ru2 -- "[aisbx] $*"; }
 trap 'log "aborted: command failed at line $LINENO"' ERR
 
 # Resolve to an absolute path so `aisbx .` doesn't produce the name "oc-."
-if (( $# )) && [[ $1 != -* ]]; then
-	repo="${1:A}"
-	shift
-else
-	repo="$PWD"
+if (( $# > 1 )); then
+	log "usage: aisbx [oc|crush] [repo]"
+	exit 2
 fi
+repo="${${1:-$PWD}:A}"
 # sbx names allow only letters, numbers, hyphens and periods; must start
 # alphanumeric, be 2-63 chars, and not end in "-" or ".".
 name="${agent}-${${repo:t}//[^a-zA-Z0-9.-]/-}"
@@ -63,8 +62,10 @@ for i in {1..$#kit_names}; do
 done
 (( $#kit_pin )) && log "kit-freshness check: latest commits are ${(j:, :)${(kv)kit_pin}}"
 
+# The agent kit is the positional AGENT|SANDBOX_KIT argument; mixins go via --kit.
+agent_kit="git+${KIT_REPO}#ref=${kit_pin[$agent]:-main}&dir=${kit_dirs[1]}"
 kit_args=()
-for i in {1..$#kit_names}; do
+for i in {2..$#kit_names}; do
 	n="${kit_names[i]}"
 	kit_args+=(--kit "git+${KIT_REPO}#ref=${kit_pin[$n]:-main}&dir=${kit_dirs[i]}")
 done
@@ -83,12 +84,10 @@ fi
 
 create_sandbox() {
 	log "creating sandbox '$name' for repo '$repo' (${(j:, :)${(kv)kit_pin}})"
-	env_args=()
 	sbx create --name "$name" \
 		--skills=off \
 		"${kit_args[@]}" \
-		"${env_args[@]}" \
-		"$agent" \
+		"$agent_kit" \
 		"$repo" \
 		"${mounts[@]}"
 
@@ -157,6 +156,13 @@ if (( sbx_ls_status != 0 )); then
 	rm -rf "$sbx_ls_tmp"
 	exit 1
 fi
+# Fail loudly on bad output: otherwise a jq error below reads as "sandbox
+# missing" and we'd try to create a duplicate. Keep the raw output to debug.
+if ! jq -e . "$sbx_ls_tmp/output" >/dev/null 2>&1; then
+	log "sbx ls --json returned invalid JSON; stdout/stderr kept in $sbx_ls_tmp. Last lines:"
+	tail -n 5 "$sbx_ls_tmp/output" | cat -v >&2
+	exit 1
+fi
 sbx_ls_json="$(<"$sbx_ls_tmp/output")"
 rm -rf "$sbx_ls_tmp"
 
@@ -203,5 +209,4 @@ else
 	fi
 fi
 
-run_env_args=()
-sbx run --name "$name" "${run_env_args[@]}" "$@"
+sbx run --name "$name"
