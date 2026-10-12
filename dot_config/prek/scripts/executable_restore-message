@@ -4,14 +4,14 @@
 set -eu
 
 msg_file=$1
-commit_source=${2:-}
+commit_source=${2:-${PRE_COMMIT_COMMIT_MSG_SOURCE:-}}
 
 case "$commit_source" in
 	""|template) ;;
 	*) exit 0 ;;
 esac
 
-cache_file=$GIT_DIR/PREPARE_COMMIT_MSG_CACHE
+cache_file=$(git rev-parse --absolute-git-dir)/PREPARE_COMMIT_MSG_CACHE
 [ -s "$cache_file" ] || exit 0
 
 title=$(sed -n '1p' "$cache_file")

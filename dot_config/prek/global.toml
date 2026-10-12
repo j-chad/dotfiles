@@ -1,0 +1,84 @@
+default_stages = ["pre-commit"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+	{ id = "trailing-whitespace" },
+	{ id = "check-added-large-files" },
+	{ id = "check-case-conflict" },
+	{ id = "check-illegal-windows-names" },
+	{ id = "end-of-file-fixer" },
+	{ id = "fix-byte-order-marker" },
+	{ id = "check-json" },
+	{ id = "check-json5" },
+	{ id = "check-jsonc" },
+	{ id = "check-toml" },
+	{ id = "check-vcs-permalinks" },
+	{ id = "check-yaml" },
+	{ id = "mixed-line-ending" },
+	{ id = "check-symlinks" },
+	{ id = "destroyed-symlinks" },
+	{ id = "check-merge-conflict" },
+	{ id = "check-executables-have-shebangs" },
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "restore-message"
+name = "Recover rejected commit message"
+language = "system"
+shell = "sh"
+entry = 'exec "$HOME/.config/prek/scripts/restore-message" "$@"'
+stages = ["prepare-commit-msg"]
+always_run = true
+priority = 0
+
+[[repos.hooks]]
+id = "ai-suggest"
+name = "Suggest commit message"
+language = "system"
+shell = "sh"
+entry = 'exec "$HOME/.config/prek/scripts/ai-suggest" "$@"'
+stages = ["prepare-commit-msg"]
+always_run = true
+priority = 10
+
+[[repos.hooks]]
+id = "lint-message"
+name = "Validate commit message"
+language = "system"
+shell = "sh"
+entry = 'exec "$HOME/.config/prek/scripts/lint-message" "$@"'
+stages = ["commit-msg"]
+always_run = true
+
+[[repos.hooks]]
+id = "clear-message"
+name = "Clear rejected commit message"
+language = "system"
+shell = "sh"
+entry = 'exec "$HOME/.config/prek/scripts/clear-message"'
+stages = ["post-commit"]
+pass_filenames = false
+always_run = true
+
+[[repos.hooks]]
+id = "staged-diff-check"
+name = "Staged whitespace and conflict markers"
+language = "system"
+entry = "git diff --cached --check"
+pass_filenames = false
+always_run = true
+priority = 10
+
+[[repos.hooks]]
+id = "betterleaks"
+name = "Betterleaks Secret Scan"
+language = "system"
+shell = "sh"
+entry = "betterleaks git --pre-commit --redact=95 --staged --no-banner --log-level=warn --verbose"
+pass_filenames = false
+always_run = true
+priority = 10

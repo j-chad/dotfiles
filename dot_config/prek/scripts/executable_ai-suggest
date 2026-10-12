@@ -11,7 +11,7 @@ command -v jq >/dev/null 2>&1 || { echo "ai-commit: jq not found; skipping sugge
 command -v curl >/dev/null 2>&1 || { echo "ai-commit: curl not found; skipping suggestion" >&2; exit 0; }
 
 msg_file=$1
-commit_source=${2:-}
+commit_source=${2:-${PRE_COMMIT_COMMIT_MSG_SOURCE:-}}
 
 case "$commit_source" in
 	""|template) ;;

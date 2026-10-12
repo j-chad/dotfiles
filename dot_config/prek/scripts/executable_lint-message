@@ -3,6 +3,7 @@
 set -euo pipefail
 
 msg_file="$1"
+git_dir=$(git rev-parse --absolute-git-dir)
 
 # Comment char is configurable; 'auto' resolves to a real char we cannot
 # predict here, so fall back to '#'.
@@ -21,7 +22,7 @@ cleaned="$(printf '%s\n' "$cleaned" \
 # Save before validating so a rejection doesn't lose it. Replaced every
 # time; evicted on success by post-commit.
 if [ -n "$cleaned" ]; then
-	printf '%s\n' "$cleaned" > "$GIT_DIR/PREPARE_COMMIT_MSG_CACHE"
+	printf '%s\n' "$cleaned" > "$git_dir/PREPARE_COMMIT_MSG_CACHE"
 fi
 
 if [ -z "$cleaned" ]; then

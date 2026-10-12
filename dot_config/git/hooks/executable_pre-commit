@@ -1,3 +1,2 @@
 #!/bin/sh
-# Dispatches pre-commit checks.
 exec "${0%/*}/_run-hook" "${0##*/}" "$@"
