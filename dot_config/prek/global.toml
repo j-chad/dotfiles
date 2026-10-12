@@ -46,15 +46,6 @@ always_run = true
 priority = 10
 
 [[repos.hooks]]
-id = "lint-message"
-name = "Validate commit message"
-language = "system"
-shell = "sh"
-entry = 'exec "$HOME/.config/prek/scripts/lint-message" "$@"'
-stages = ["commit-msg"]
-always_run = true
-
-[[repos.hooks]]
 id = "clear-message"
 name = "Clear rejected commit message"
 language = "system"
@@ -107,4 +98,11 @@ hooks = [
 	{
 		id = "vale-commit-msg",
 	}
+]
+
+[[repos]]
+repo = "https://github.com/editorconfig-checker/editorconfig-checker"
+rev = "v4.0.2"
+hooks = [
+	{ id = "editorconfig-checker" },
 ]
