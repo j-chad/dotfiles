@@ -82,3 +82,10 @@ entry = "betterleaks git --pre-commit --redact=95 --staged --no-banner --log-lev
 pass_filenames = false
 always_run = true
 priority = 10
+
+[[repos]]
+repo = "https://github.com/crate-ci/typos"
+rev = "v1.51.1"
+hooks = [
+	{ id = "typos" },
+]
