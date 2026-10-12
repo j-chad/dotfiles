@@ -1,0 +1,12 @@
+engine: dasel
+scopes:
+  - name: title
+    expr: info.title
+
+  - name: description
+    expr: search(has("description")).map(description)
+    type: md
+
+  - name: summary
+    expr: search(has("summary")).map(summary)
+    type: md
