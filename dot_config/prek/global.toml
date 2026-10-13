@@ -92,13 +92,6 @@ hooks = [
 ]
 
 [[repos]]
-repo = "https://github.com/editorconfig-checker/editorconfig-checker"
-rev = "v4.0.2"
-hooks = [
-	{ id = "editorconfig-checker" },
-]
-
-[[repos]]
 repo = "https://github.com/semgrep/pre-commit"
 rev = "v1.180.0"
 hooks = [
