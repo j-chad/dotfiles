@@ -15,18 +15,18 @@ cache_file=$(git rev-parse --absolute-git-dir)/PREPARE_COMMIT_MSG_CACHE
 [ -s "$cache_file" ] || exit 0
 
 title=$(sed -n '1p' "$cache_file")
-body=$(sed '1d' "$cache_file" | sed '/^[[:space:]]*$/d')
 [ -n "$title" ] || exit 0
+
+comment_char=$(git config core.commentChar 2>/dev/null || printf '#')
+[ "$comment_char" != auto ] || comment_char='#'
 
 tmp_file=$(mktemp)
 {
 	echo ""
-	echo "# Previous attempt: $title"
-	if [ -n "$body" ]; then
-		echo "#"
-		printf '%s\n' "$body" | sed 's/^/# /'
-	fi
-	echo "#"
+	printf '%s ' "$comment_char"
+	printf 'Previous attempt: %s\n' "$title"
+	awk -v prefix="$comment_char" 'NR > 1 { if ($0 == "") print prefix; else print prefix " " $0 }' "$cache_file"
+	printf '%s\n' "$comment_char"
 	sed -e '/./,$!d' "$msg_file"
 } > "$tmp_file"
 mv "$tmp_file" "$msg_file"

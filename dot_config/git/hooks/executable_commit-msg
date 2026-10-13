@@ -1,3 +1,24 @@
 #!/bin/sh
 # Dispatches commit-message actions.
+set -eu
+
+msg_file=$1
+git_dir=$(git rev-parse --absolute-git-dir)
+cache_file="$git_dir/PREPARE_COMMIT_MSG_CACHE"
+tmp_file=$(mktemp "$git_dir/PREPARE_COMMIT_MSG_CACHE.XXXXXX")
+trap 'rm -f "$tmp_file"' 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+comment_char=$(git config core.commentChar 2>/dev/null || printf '#')
+[ "$comment_char" != auto ] || comment_char='#'
+
+# Save before any commit-msg hook can reject the message.
+awk -v comment_char="$comment_char" 'index($0, comment_char) == 1 { if (index($0, ">8") > 0) exit; next } { print }' "$msg_file" \
+	| git stripspace > "$tmp_file"
+if [ -s "$tmp_file" ]; then
+	mv "$tmp_file" "$cache_file"
+fi
+
 exec "${0%/*}/_run-hook" "${0##*/}" "$@"
