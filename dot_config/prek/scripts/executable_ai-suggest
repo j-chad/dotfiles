@@ -56,17 +56,31 @@ schema='{
 	"type": "object",
 	"properties": {
 		"title": {"type": "string", "minLength": 5, "maxLength": 72},
-		"body": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 10}
+		"body": {"type": "array", "items": {"type": "string", "maxLength": 72}, "maxItems": 10}
 	},
 	"required": ["title", "body"],
 	"additionalProperties": false
 }'
 
-payload=$(jq -n --arg model "$model" --arg context "$context" --argjson schema "$schema" '
+system_prompt=$(cat <<'EOF'
+You write git commit messages from a diff and repository context. Follow the Go
+commit-message style, even if recent titles differ: start the subject with the
+primary affected package or component and a colon (for example, 'git: restore
+rejected messages'); use comma-separated areas when several are affected. If
+there is no obvious package or component, use 'all:' for repository-wide
+changes or 'misc:' otherwise. Follow the prefix with a concise, lowercase
+imperative summary with no trailing period. Separate the subject from the body
+with a blank line. Explain what changed and why in the body, wrapping lines at
+about 72 characters. Use 'Fixes #123' or 'Updates #123' only when the issue
+number is present in the provided context. Omit the body for trivial changes.
+EOF
+)
+
+payload=$(jq -n --arg model "$model" --arg context "$context" --arg system_prompt "$system_prompt" --argjson schema "$schema" '
 	{
 		temperature: 0.2,
 		messages: [
-			{role: "system", content: "You write git commit messages from a diff and repository context. Title: imperative mood, no trailing period, specific about what changed. Body: explain what changed and why, wrapped under 80 characters per line. Match the style of the recent commit titles when possible. Omit the body if the change is trivial."},
+			{role: "system", content: $system_prompt},
 			{role: "user", content: $context}
 		],
 		response_format: {type: "json_schema", json_schema: {name: "commit_message", schema: $schema}}
