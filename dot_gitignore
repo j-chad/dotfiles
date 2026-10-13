@@ -171,3 +171,6 @@ AGENTS.md
 CLAUDE.md
 
 .editorconfig
+
+.vale.ini
+styles
