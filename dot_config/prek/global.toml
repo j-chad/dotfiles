@@ -64,16 +64,6 @@ pass_filenames = false
 always_run = true
 priority = 10
 
-[[repos.hooks]]
-id = "betterleaks"
-name = "Betterleaks Secret Scan"
-language = "system"
-shell = "sh"
-entry = "betterleaks git --pre-commit --redact=95 --staged --no-banner --log-level=warn --verbose"
-pass_filenames = false
-always_run = true
-priority = 10
-
 [[repos]]
 repo = "https://github.com/crate-ci/typos"
 rev = "v1.51.1"
@@ -87,12 +77,6 @@ rev = "v3.24.0"
 hooks = [
 	{
 		id = "vale",
-		name = "Vale Sync",
-		pass_filenames = false,
-		args = ["sync"],
-	},
-	{
-		id = "vale",
 		args = ["--output=line", "--minAlertLevel=error"],
 	},
 	{
@@ -101,8 +85,39 @@ hooks = [
 ]
 
 [[repos]]
+repo = "https://github.com/betterleaks/betterleaks"
+rev = "v1.9.0"
+hooks = [
+	{ id = "betterleaks" },
+]
+
+[[repos]]
 repo = "https://github.com/editorconfig-checker/editorconfig-checker"
 rev = "v4.0.2"
 hooks = [
 	{ id = "editorconfig-checker" },
+]
+
+[[repos]]
+repo = "https://github.com/semgrep/pre-commit"
+rev = "v1.180.0"
+hooks = [
+	{
+		id = "semgrep",
+		args = ["--metrics=off", "--config=p/default"],
+		files = { glob = ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx", "**/*.go"] },
+		always_run = false,
+	}
+]
+
+[[repos]]
+repo = "https://github.com/google/osv-scanner"
+rev = "v2.7.0"
+hooks = [
+	{
+		id = "osv-scanner",
+		files = { glob = ["**/Cargo.lock", "**/package-lock.json", "**/go.mod", "**/requirements.txt"] },
+		always_run = false,
+		pass_filenames = false,
+	}
 ]
