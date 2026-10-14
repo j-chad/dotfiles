@@ -5,8 +5,7 @@
 	"snapshots": false,
 	"default_agent": "plan",
 	"plugins": [
-		"@dietrichgebert/ponytail",
-		"opencode-bash-frisk@0.1.3"
+		"@dietrichgebert/ponytail"
 	],
 	"experimental": {
 		"subagent_depth": 1,
