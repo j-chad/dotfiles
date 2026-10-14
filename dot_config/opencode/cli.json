@@ -1,0 +1,16 @@
+{
+	"$schema": "https://opencode.ai/v2/cli.json",
+	"theme": {
+		"name": "material",
+		"mode": "system"
+	},
+	"animations": true,
+	"session": {
+		"tps": true,
+		"thinking": "show"
+	},
+	"attention": {
+		"notifications": true,
+		"sound": false
+	}
+}

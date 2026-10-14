@@ -1,6 +1,6 @@
 {{- $gomodcache := output "go" "env" "GOMODCACHE" | trim -}}
 schemaVersion: "1"
-agent: opencode
+agent: git+https://gitlab.com/j-chad/sbx?dir=agents/oc
 workspace: {{ "${{ env.projectDir }}" }}
 
 additionalWorkspaces:
