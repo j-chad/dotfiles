@@ -1,0 +1,17 @@
+{{- $gomodcache := output "go" "env" "GOMODCACHE" | trim -}}
+schemaVersion: "1"
+agent: opencode
+workspace: {{ "${{ env.projectDir }}" }}
+
+additionalWorkspaces:
+  - path: "{{ $gomodcache }}"
+    readOnly: true
+  - path: "{{ .chezmoi.homeDir }}/.config/opencode"
+    readOnly: true
+
+env:
+  GOPROXY: "file://{{ $gomodcache }}/cache/download,https://proxy.golang.org,direct"
+  OPENCODE_CONFIG_DIR: "{{ .chezmoi.homeDir }}/.config/opencode"
+
+sandboxOptions:
+  skills: off

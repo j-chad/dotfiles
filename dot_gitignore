@@ -174,3 +174,5 @@ CLAUDE.md
 
 .vale.ini
 styles
+
+local.sbxenv.yaml

@@ -1,0 +1,12 @@
+{
+	"$schema": "https://opencode.ai/tui.json",
+	"theme": "material",
+	"plugin": [
+		[
+			"opencode-session-cost",
+			{
+				"enabled": true
+			}
+		]
+	]
+}

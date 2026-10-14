@@ -1,0 +1,61 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"share": "disabled",
+	"autoupdate": false,
+	"snapshot": false,
+	"default_agent": "plan",
+	"plugin": [
+		"@dietrichgebert/ponytail",
+		"opencode-models-discovery"
+	],
+	"enabled_providers": [
+		"github-copilot",
+		"lmstudio"
+	],
+	"provider": {
+		"lmstudio": {
+			"npm": "@ai-sdk/openai-compatible",
+			"name": "LMStudio",
+			"options": {
+				"baseURL": "http://host.docker.internal:1234/v1",
+				"modelsDiscovery": {
+					"enabled": true
+				}
+			}
+		}
+	},
+	"small_model": "github-copilot/gpt-6-luna",
+	"model": "github-copilot/gpt-6-luna",
+	"subagent_depth": 1,
+	"permission": {
+		"*": "ask",
+		"read": {
+			"*": "allow",
+			"*.env": "deny",
+			"*.env.*": "deny"
+		},
+		"bash": "ask",
+		"task": {
+			"*": "ask",
+			"explore": "allow"
+		},
+		"skill": {
+			"*": "ask",
+			"ponytail": "allow"
+		},
+		"glob": "allow",
+		"grep": "allow",
+		"list": "allow",
+		"todowrite": "allow",
+		"todoread": "allow",
+		"question": "allow",
+		"external_directory": "allow"
+	},
+	"agent": {
+		"explore": {
+			"model": "github-copilot/gpt-6-luna",
+			"variant": "high"
+		}
+	},
+	"lsp": true
+}
