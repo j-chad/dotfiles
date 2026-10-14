@@ -16,13 +16,17 @@ esac
 export GIT_HOOKS_ACTIVE="${GIT_HOOKS_ACTIVE:-}:$hook_name"
 
 stdin_file=
-if [ ! -t 0 ]; then
-	stdin_file=$(mktemp)
-	trap 'rm -f "$stdin_file"' 0
-	trap 'exit 130' INT
-	trap 'exit 143' TERM
-	cat > "$stdin_file"
-fi
+case "$hook_name" in
+	pre-push|post-rewrite)
+		if [ ! -t 0 ]; then
+			stdin_file=$(mktemp)
+			trap 'rm -f "$stdin_file"' 0
+			trap 'exit 130' INT
+			trap 'exit 143' TERM
+			cat > "$stdin_file"
+		fi
+		;;
+esac
 
 run() {
 	if [ -n "$stdin_file" ]; then
@@ -32,11 +36,31 @@ run() {
 	fi
 }
 
+repo_status=0
 if [ -x "$repo_hook" ]; then
 	repo_hooks_dir=$(CDPATH= cd -- "$repo_hooks" && pwd -P)
 	if [ "$repo_hooks_dir" != "$hook_dir" ] && ! [ "$repo_hook" -ef "$hook_dir/$hook_name" ]; then
-		run "$repo_hook" "$@"
+		if [ "$hook_name" = post-commit ]; then
+			run "$repo_hook" "$@" || repo_status=$?
+		else
+			run "$repo_hook" "$@"
+		fi
 	fi
 fi
 
+PATH="$HOME/.local/bin:$PATH"
+export PATH
+if ! command -v prek >/dev/null 2>&1; then
+	if [ "$hook_name" = post-commit ]; then
+		"$HOME/.config/prek/scripts/clear-message"
+		exit "$repo_status"
+	fi
+	echo "git-hooks: prek is required; install it with https://prek.j178.dev/installation/" >&2
+	exit 127
+fi
+
+if [ "$hook_name" = post-commit ] && [ "${repo_status:-0}" -ne 0 ]; then
+	run prek hook-impl --config "$HOME/.config/prek/global.toml" --hook-type "$hook_name" -- "$@" || true
+	exit "$repo_status"
+fi
 run prek hook-impl --config "$HOME/.config/prek/global.toml" --hook-type "$hook_name" -- "$@"
