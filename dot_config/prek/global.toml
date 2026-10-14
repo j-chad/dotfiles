@@ -97,7 +97,7 @@ rev = "v1.180.0"
 hooks = [
 	{
 		id = "semgrep",
-		args = ["--metrics=off", "--config=p/default"],
+		args = ["--disable-version-check", "--metrics=off", "--error", "--config=p/default"],
 		files = { glob = ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx", "**/*.go"] },
 		always_run = false,
 	}
@@ -109,8 +109,9 @@ rev = "v2.7.0"
 hooks = [
 	{
 		id = "osv-scanner",
-		files = { glob = ["**/Cargo.lock", "**/package-lock.json", "**/go.mod", "**/requirements.txt"] },
+		args = ["scan", "source", "--format=vertical", "--verbosity=error"],
+		files = { glob = ["**/Cargo.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/yarn.lock", "**/go.mod", "**/requirements.txt", "**/uv.lock", "**/poetry.lock", "**/Pipfile.lock"] },
 		always_run = false,
-		pass_filenames = false,
+		pass_filenames = true,
 	}
 ]
