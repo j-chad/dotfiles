@@ -48,7 +48,7 @@ $diff
 EOF
 )
 
-base_url=$(git config ai.commitUrl || echo "http://localhost:1234/v1")
+base_url=http://localhost:1234/v1
 model=$(git config ai.commitModel || echo "")
 timeout=$(git config ai.commitTimeout || echo 20)
 
@@ -128,28 +128,21 @@ if [ -z "$content" ]; then
 fi
 
 if ! printf '%s' "$content" \
-	| jq -e '(.title | type == "string" and length >= 5 and length <= 72) and (.body | type == "array")' >/dev/null 2>&1; then
+	| jq -e '(.title | type == "string" and length >= 5 and length <= 72 and (test("[\\r\\n]") | not)) and (.body | type == "array" and length <= 10 and all(.[]; type == "string" and length <= 72 and (test("[\\r\\n]") | not)))' >/dev/null 2>&1; then
 	echo "ai-commit: malformed response after ${elapsed}s; continuing without suggestion" >&2
 	exit 0
 fi
 
-# Comment char is configurable; 'auto' resolves to a real char we cannot
-# predict here, so fall back to '#'.
 comment_char="$(git config core.commentChar 2>/dev/null || echo '#')"
-if [ "$comment_char" = auto ]; then comment_char='#'; fi
-
-title=$(printf '%s' "$content" | jq -r '.title')
-body=$(printf '%s' "$content" | jq -r '.body[]?')
+comment_char_length=$(printf '%s' "$comment_char" | wc -m | tr -d ' ')
+if [ "$comment_char" = auto ] || [ "$comment_char_length" -ne 1 ]; then
+	echo "ai-commit: unsupported Git comment character; continuing without suggestion" >&2
+	exit 0
+fi
 
 {
 	echo ""
-	echo "${comment_char} AI suggestion: $title"
-	if [ -n "$body" ]; then
-		echo "${comment_char}"
-		printf '%s\n' "$body" | sed "s/^/${comment_char} /"
-	fi
-	echo "${comment_char}"
-	echo "${comment_char} Remove the comment prefixes above to use this message."
+	printf '%s' "$content" | jq -r --arg prefix "$comment_char" '"\($prefix) AI suggestion: \(.title)", (if (.body | length) > 0 then "\($prefix)", (.body[] | "\($prefix) \(.)") else empty end), "\($prefix)", "\($prefix) Remove the comment prefixes above to use this message."'
 	cat "$msg_file"
 } > "$tmp_msg"
 mv "$tmp_msg" "$msg_file"
