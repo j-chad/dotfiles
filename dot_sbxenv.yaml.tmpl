@@ -1,7 +1,11 @@
 {{- $gomodcache := output "go" "env" "GOMODCACHE" | trim -}}
 schemaVersion: "1"
-agent: git+https://gitlab.com/j-chad/sbx?dir=agents/oc
+agent: oc
 workspace: {{ "${{ env.projectDir }}" }}
+
+kits:
+  - git+https://gitlab.com/j-chad/sbx.git#ref=main&dir=agents/oc
+  - git+https://gitlab.com/j-chad/sbx.git#ref=main&dir=mixins/lmstudio
 
 additionalWorkspaces:
   - path: "{{ $gomodcache }}"
@@ -11,7 +15,17 @@ additionalWorkspaces:
 
 env:
   GOPROXY: "file://{{ $gomodcache }}/cache/download,https://proxy.golang.org,direct"
-  OPENCODE_CONFIG_DIR: "{{ .chezmoi.homeDir }}/.config/opencode"
 
 sandboxOptions:
   skills: off
+
+lifecycle:
+  postCreate:
+    - name: Link OpenCode config, agents, and skills
+      command: |
+        sbx exec "$SBX_SANDBOX_NAME" -- ln -sfn \
+          "{{ .chezmoi.homeDir }}/.config/opencode/opencode.jsonc" \
+          "{{ .chezmoi.homeDir }}/.config/opencode/cli.json" \
+          "{{ .chezmoi.homeDir }}/.config/opencode/agents" \
+          "{{ .chezmoi.homeDir }}/.config/opencode/skills" \
+          /home/agent/.config/opencode/
