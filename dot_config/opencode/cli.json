@@ -8,7 +8,7 @@
 	"session": {
 		"tps": true,
 		"thinking": "hide",
-		"verbosity": "medium"
+		"verbosity": "high"
 	},
 	"attention": {
 		"notifications": true,
