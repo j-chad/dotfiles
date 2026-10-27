@@ -63,4 +63,11 @@ When presenting your findings, structure your response as follows:
 [List all sources referenced during your research, including links to documentation, articles, and other relevant materials.]
 ```
 
-Write the report in .opencode/research directory, using a filename that reflects the topic or query.
+Every statement you make must be backed by a source. Use footnotes or inline citations to reference the sources of your information. For example:
+```md
+According to the official documentation, the `fetchData` function is used to retrieve data from the server[^1].
+[^1]: [Official Documentation](https://example.com/docs/fetchData)
+```
+
+
+Write the report in .opencode/research directory, using a filename that reflects the topic or query. If the report is long, consider breaking it into multiple files inside a parent folder, each focusing on a specific aspect of the research.
