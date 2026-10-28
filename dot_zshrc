@@ -90,7 +90,7 @@ export EDITOR="micro"
 export HOMEBREW_AUTO_UPDATE_SECS="86400" # 24 hours
 
 # --- Golang ---
-export PATH="$PATH:$(go env GOPATH)/bin"
+export PATH="$PATH:$(GOTOOLCHAIN=local go env GOPATH)/bin"
 
 # --- Compile ZSH ---
 if [[ ! -f ~/.zshrc.zwc || ~/.zshrc -nt ~/.zshrc.zwc ]]; then
