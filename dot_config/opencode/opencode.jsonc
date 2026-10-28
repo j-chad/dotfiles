@@ -4,9 +4,6 @@
 	"update": "disable",
 	"snapshots": false,
 	"default_agent": "plan",
-	"plugins": [
-		"@dietrichgebert/ponytail"
-	],
 	"experimental": {
 		"subagent_depth": 1,
 		"policies": [
