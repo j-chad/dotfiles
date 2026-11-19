@@ -19,13 +19,13 @@
 			}
 		}
 	},
-	"model": "github-copilot/gpt-6-luna",
+	"model": "github-copilot/mai-code-2",
 	"agents": {
 		"title": {
-			"model": "github-copilot/gpt-6-luna"
+			"model": "github-copilot/mai-code-2-flash"
 		},
 		"explore": {
-			"model": "github-copilot/gpt-6-luna#high"
+			"model": "github-copilot/mai-code-2-flash#xhigh"
 		}
 	},
 	"permissions": [
