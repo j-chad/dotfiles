@@ -17,15 +17,31 @@
 			"settings": {
 				"baseURL": "http://host.docker.internal:1234/v1"
 			}
+		},
+		"github-copilot": {
+			"models": {
+				"jc-smart": {
+					"modelID": "claude-opus-5.5",
+					"name": "JC Smart"
+				},
+				"jc-balanced": {
+					"modelID": "github-copilot/mai-code-2",
+					"name": "JC Balanced"
+				},
+				"jc-fast": {
+					"modelID": "github-copilot/mai-code-2-flash",
+					"name": "JC Fast"
+				}
+			}
 		}
 	},
-	"model": "github-copilot/mai-code-2",
+	"model": "github-copilot/jc-balanced",
 	"agents": {
 		"title": {
-			"model": "github-copilot/mai-code-2-flash"
+			"model": "github-copilot/jc-fast"
 		},
 		"explore": {
-			"model": "github-copilot/mai-code-2-flash#xhigh"
+			"model": "github-copilot/jc-fast#xhigh"
 		}
 	},
 	"permissions": [

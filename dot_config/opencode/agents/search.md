@@ -2,7 +2,7 @@
 color: "#A167A5"
 description: "Web research agent. Does comprehensive web research to find relevant information, resources, and references for a given topic or question."
 mode: subagent
-model: github-copilot/gpt-6-luna#medium
+model: github-copilot/jc-fast#high
 permissions:
   - action: websearch
     resource: "*"

@@ -2,6 +2,7 @@
 color: "#F56960"
 description: "Deep research agent. Performs in-depth research on a topic, synthesising information from multiple sources to provide comprehensive insights and recommendations."
 mode: primary
+model: github-copilot/jc-balanced#high
 permissions:
   - action: subagent
     resource: explore
