@@ -6,12 +6,16 @@ workspace: {{ "${{ env.projectDir }}" }}
 kits:
   - git+https://gitlab.com/j-chad/sbx.git#ref=main&dir=agents/oc
   - git+https://gitlab.com/j-chad/sbx.git#ref=main&dir=mixins/lmstudio
+  - git+https://gitlab.com/j-chad/sbx.git#ref=main&dir=mixins/plannotator
 
 additionalWorkspaces:
   - path: "{{ $gomodcache }}"
     readOnly: true
   - path: "{{ .chezmoi.homeDir }}/.config/opencode"
     readOnly: true
+
+mounts:
+  /home/agent/.plannotator: "{{ .chezmoi.homeDir }}/.plannotator"
 
 env:
   GOPROXY: "file://{{ $gomodcache }}/cache/download,https://proxy.golang.org,direct"
@@ -20,6 +24,13 @@ sandboxOptions:
   skills: off
 
 lifecycle:
+  initialize:
+    - name: Prepare Plannotator state
+      command: mkdir -p "{{ .chezmoi.homeDir }}/.plannotator"
+
+    - name: Open Plannotator reviews
+      command: plannotator-open --ensure --sandbox "$SBX_SANDBOX_NAME"
+      timeout: 10s
   postCreate:
     - name: Link OpenCode config, agents, and skills
       command: |
