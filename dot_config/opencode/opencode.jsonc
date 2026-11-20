@@ -25,11 +25,11 @@
 					"name": "JC Smart"
 				},
 				"jc-balanced": {
-					"modelID": "github-copilot/mai-code-2",
+					"modelID": "mai-code-2",
 					"name": "JC Balanced"
 				},
 				"jc-fast": {
-					"modelID": "github-copilot/mai-code-2-flash",
+					"modelID": "mai-code-2-flash",
 					"name": "JC Fast"
 				}
 			}
