@@ -18,6 +18,8 @@ hooks = [
 	{ id = "check-symlinks" },
 	{ id = "destroyed-symlinks" },
 	{ id = "check-merge-conflict" },
+	{ id = "detect-private-key" },
+	{ id = "check-signed-commit" },
 	{ id = "check-executables-have-shebangs" },
 ]
 
