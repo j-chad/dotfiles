@@ -62,5 +62,10 @@
 		{ "action": "question", "resource": "*", "effect": "allow" },
 		{ "action": "external_directory", "resource": "*", "effect": "allow" }
 	],
-	"lsp": true
+	"lsp": true,
+	"formatter": {
+		"prettier": {
+			"extensions": [".md", ".mdx"]
+		}
+	}
 }
