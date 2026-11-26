@@ -28,15 +28,6 @@ A round contains the current frontier. The frontier is the set of decisions whos
 
 ## Round format
 
-Choose one format for each round:
-
-- If at least one frontier question has useful predefined options, use the `question` tool.
-- If all frontier questions are open-ended and have no useful predefined options, use the Markdown format in chat.
-
-Do not repeat a `question` tool round in chat.
-
-### Question tool rounds
-
 1. Send one `question` tool call that contains the full frontier in the `questions` array.
 2. Keep related open-ended frontier questions in the same `question` tool call. The user can select "Type your own answer".
 3. Set `header` to a short title of 30 characters or fewer.
@@ -86,24 +77,4 @@ Example `question` tool payload:
 		}
 	]
 }
-```
-
-### Markdown fallback rounds
-
-1. Number the frontier questions as `Q1`, `Q2`, and so on.
-2. Write each question so that the answer "yes" accepts your recommended answer.
-3. Put your recommended answer after the question
-
-Format a Markdown round like this:
-
-```markdown
-❓ **Q1** - **<question title>**: <question body>
-
-➡️ <recommended answer>
-
----
-
-❓ **Q2** - **<question title>**: <question body>
-
-➡️ <recommended answer>
 ```
